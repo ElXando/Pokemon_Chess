@@ -1,0 +1,279 @@
+html {
+    font-family: sans-serif;
+}
+body{
+    /*background-image:url("../img/background.png");*/
+    background-color:#302e2b;
+    background-image:linear-gradient(to right, #302e2b, #4e4e4e, #302e2b);
+    background-size:cover;
+    color:white;
+}
+body a{
+    color:lightblue;
+}
+canvas#chess_game {
+    background-color: #000;
+    /*padding: 20px;*/
+    border: 3px solid #222;
+    margin:10px 0;
+    vertical-align:bottom;
+}
+div.button {
+    background-color: lightblue;
+    border: 2px solid darkblue;
+    border-radius: 1em;
+    font-weight: bold;
+    padding: 1.5em;
+    text-align: center;
+    width: 10em;
+}
+
+.hidden{
+    display:none !important;
+}
+
+.content {
+    display:flex;
+    align-items:center;
+    text-align:center;
+    justify-content:center;
+    flex-direction:column;
+    height:100%;
+    width:100%;
+}
+
+.pointer {
+    cursor:pointer;
+}
+
+.die_face{
+    display:grid;
+    grid-template-areas:
+        "a . c"
+        "e g f"
+        "d . b";
+    flex:0 0 auto;
+    padding:10px;
+    width:100px;
+    height:100px;
+    background-color:#e7e7e7;
+    box-shadow: inset 0 5px white, inset 0 -5px #bbb, inset 5px 0 #d7d7d7, inset -5px 0 #d7d7d7;
+    border-radius: 10%;
+}
+.pip {
+    display: block;
+    align-self: center;
+    justify-self: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #333;
+    box-shadow: inset 0 3px #111, inset 0 -3px #555;
+}
+
+.pip:nth-child(2) {
+    grid-area: b;
+}
+.pip:nth-child(3) {
+    grid-area: c;
+}
+.pip:nth-child(4) {
+    grid-area: d;
+}
+.pip:nth-child(5) {
+    grid-area: e;
+}
+.pip:nth-child(6) {
+    grid-area: f;
+}
+/* This selects the last pip of odd-valued dice (1, 3, 5) and positions the pip in the center */
+.pip:nth-child(odd):last-child {
+    grid-area: g;
+}
+
+.button-1 {
+    background-color: #779556;
+    border-radius: 8px;
+    border-style: none;
+    box-sizing: border-box;
+    color: #FFFFFF;
+    cursor: pointer;
+    display: block;
+    font-family: "Haas Grot Text R Web", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    height: 40px;
+    line-height: 20px;
+    list-style: none;
+    margin: 0 auto;
+    outline: none;
+    padding: 10px 16px;
+    position: relative;
+    text-align: center;
+    text-decoration: none;
+    transition: color 100ms;
+    vertical-align: baseline;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+}
+
+.inline-button{
+    display:inline-block;
+    margin:5px;
+}
+
+.button-1.unready {
+    background-color:#eb4d4b;
+}
+.button-1.ready{
+    background-color:#6ab04c;
+}
+
+.button-1:hover,
+.button-1:focus {
+    background-color: #0072bb;
+}
+
+input[type=text], select{
+    padding:12px 20px;
+    margin:8px 0;
+    border:1px solid #ccc;
+    border-radius:4px;
+    box-sizing:border-box;
+    width:100%;
+}
+
+.styled-table {
+    border-collapse: collapse;
+    margin: 25px 0;
+    font-size: 0.9em;
+    font-family: sans-serif;
+    min-width: 400px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+}
+
+.styled-table thead tr {
+    background-color: #779556;
+    color: #ffffff;
+}
+
+.styled-table th,
+.styled-table td {
+    padding: 12px 15px;
+    max-width:300px;
+    overflow:hidden;
+}
+
+.styled-table tbody tr {
+    border-bottom: 1px solid #dddddd;
+}
+
+.styled-table tbody tr:nth-of-type(even) {
+    background-color: #646464;
+}
+
+.styled-table tbody tr:last-of-type {
+    border-bottom: 2px solid #779556;
+}
+#mid_board{
+    position:absolute;
+    top:0;
+    left:0;
+    bottom:0;
+    right:0;
+    margin:auto;
+    height:max-content;
+    width:max-content;
+    font-size:120px;
+    line-height:120px;
+    pointer-events:none;
+}
+.board_message{
+    background-color:white;
+    color:#302e2b;
+    position:absolute;
+    top:0;
+    left:0;
+    bottom:0;
+    right:0;
+    margin:auto;
+    height:max-content;
+    width:max-content;
+    padding:10px;
+    border-radius:20px;
+}
+#chess_clock{
+    position:absolute;
+    top:0;
+    bottom:0;
+    left:100%;
+    margin:auto 0;
+    height:200px;
+    width:200px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-evenly;
+}
+#spectators{
+    position:absolute;
+    right:100%;
+    top:0;
+    margin-top:10px;
+    width:200px;
+}
+#enemy_taken{
+    top:0;
+    margin-top:10px;
+}
+#player_taken{
+    /*display:flex;
+    align-items:flex-end;*/
+    bottom:0;
+    margin-bottom:10px;
+}
+.taken_area{
+    position:absolute;
+    left:100%;
+    width:200px;
+    text-align:left;
+}
+.taken_area div{
+    display:inline-block;
+    background-size:66px;
+    width:66px;
+    height:66px;
+}
+.taken_area img{
+    width:66px;
+}
+.player_clock{
+    font-size:50px;
+}
+#left_information{
+    position:fixed;
+    left:10px;
+    bottom:10px;
+    font-size:20px;
+}
+#information{
+    position:fixed;
+    right:10px;
+    bottom:10px;
+    text-align:right;
+    font-size:20px;
+}
+#player_gif, #enemy_gif{
+    position:absolute;
+    width:100%;
+    left:0;
+}
+#player_gif{
+    bottom:0;
+}
+#enemy_gif{
+    top:0;
+}
+#player_gif img, #enemy_gif img{
+    width:100%;
+}

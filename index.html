@@ -1,0 +1,173 @@
+﻿
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-RH0S49Z6L6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-RH0S49Z6L6');
+  </script>
+  <meta charset="UTF-8" />
+  <title>Pokémon Chess</title>
+
+  <link rel="shortcut icon" href="favicon.ico">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+  <script src="js/socket.io.min.js"></script>
+  <script src="js/md5.min.js"></script>
+  <link href="css/chess.css?v=2" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" rel="stylesheet" />
+</head>
+<body onload="loadImages()">
+<div class="content">
+  <div style="width:100%">
+    <img src="img/Pokemon%20Chess%20Logo.webp" height="300px" style="margin:10px;" />
+  </div>
+  <div id="setup_div">
+    <span id="preloading_images">Preloading images! Please wait for this message to disappear before trying to host or join.</span>
+    <br />
+    <input maxlength="30" type="text" id="yourName" placeholder="Your Name (Enter to see rooms)" />
+    <br />
+    <input maxlength="30" type="text" id="roomName" placeholder="Room Name" />
+    <br />
+    <input type="text" id="roomPassword" placeholder="Password (Optional)" />
+    <br />
+
+    <div id="has_name" class="hidden">
+      <button id="host_game" class="button-1">Host Game</button>
+      <br />
+      <h3>Available Rooms <span id="available_count">()</span> <i class="fa fa-rotate reload-rooms pointer"></i></h3>
+
+      <table class="styled-table" style="width:800px;">
+        <thead>
+        <tr>
+          <th>Host</th>
+          <th>Room Name</th>
+          <th>Win Rate</th>
+          <th>Type</th>
+        </tr>
+        </thead>
+        <tbody id="room_list">
+
+        </tbody>
+      </table>
+      <br />
+      <h3>Spectate <span id="spectate_count">()</span> <i class="fa fa-rotate reload-spectate pointer"></i></h3>
+
+      <table class="styled-table" style="width:800px;">
+        <thead>
+        <tr>
+          <th>Player 1</th>
+          <th>Player 2</th>
+          <th>Room Name</th>
+          <th>Type</th>
+        </tr>
+        </thead>
+        <tbody id="spectate_list">
+
+        </tbody>
+      </table>
+    </div>
+
+
+  </div>
+  <div id="game" class="hidden">
+    <h1 id="enemy_name">Awaiting Opponent...</h1>
+    <button id="enemy_ready" class="button-1 unready" style="pointer-events:none;">Not Ready <i class="fa fa-thumbs-down"></i></button>
+
+    <div style="width:100%;height:100%;position:relative;">
+      <div id="mid_board" class="hidden"></div>
+      <div id="promotion_choice" class="hidden board_message">
+        Choose Promotion<br />
+        <img class="pointer" data-type="QUEEN" src="img/queen%20white.png" width="100px" /><img class="pointer" data-type="KNIGHT" src="img/knight%20white.png" width="100px" /><img class="pointer" data-type="BISHOP" src="img/bishop%20white.png" width="100px" /><img class="pointer" data-type="ROOK" src="img/rook%20white.png" width="100px" />
+      </div>
+      <div id="win_message" class="hidden board_message">
+        <h3>Game Over!</h3>
+        <div id="winner_name"></div>
+        <br />
+        <div id="rematch_wanted"></div>
+        <button class="button-1" id="rematch">Rematch?</button>
+      </div>
+      <div id="opponent_disconnected" class="hidden board_message">
+        <b>Opponent disconnected!</b><br /><br />
+        <button onclick="location.reload()" class="button-1">Reload</button>
+      </div>
+      <div id="you_disconnected" class="hidden board_message">
+        <b>You have disconnected for reason: <span id="disconnect_reason"></span></b><br />
+        Try to keep the tab active.<br /><br />
+        <button onclick="location.reload()" class="button-1">Reload</button>
+      </div>
+      <div id="skip_move_hint" class="hidden board_message">
+        <b>There's a skip additional move button below the board if you don't want to do an additional move...</b>
+      </div>
+      <div id="spectators"></div>
+      <div id="enemy_gif" class="hidden"><img src="" /></div>
+      <canvas id="chess_game" width="800" height="800">
+        Canvas enabled chess game.
+      </canvas>
+      <div id="player_gif" class="hidden"><img src="" /></div>
+      <div class="taken_area" id="enemy_taken"></div>
+      <div id="chess_clock">
+        <div class="player_clock" data-remaining="600000" id="enemy_clock">10:00.0</div>
+        <div class="divider"><i class="fa fa-3x fa-clock"></i></div>
+        <div class="player_clock" data-remaining="600000" id="player_clock">10:00.0</div>
+      </div>
+      <div class="taken_area" id="player_taken"></div>
+    </div>
+
+    <button id="player_ready" class="button-1 unready hidden">Ready <i class="fa fa-thumbs-up"></i></button>
+    <button id="skip_move" class="button-1 hidden">Skip Additional Move</button>
+    <h1 id="player_name"></h1>
+    <div class="hidden" id="types"></div>
+    <div id="piece_setup_div" class="hidden">
+      <div id="piece_choice"></div>
+      <table class="styled-table" id="saved_teams_table" style="width:800px;">
+        <thead>
+        <tr>
+          <th>Team Name</th>
+          <th>Delete</th>
+        </tr>
+        </thead>
+        <tbody>
+
+        </tbody>
+      </table>
+      <button class="button-1 inline-button" id="randomise_all">Randomise All</button>
+      <button class="button-1 inline-button" id="randomise_missing">Randomise Missing</button>
+      <button class="button-1 inline-button hidden" id="save_team">Save Team</button>
+      <div id="taken_piece"></div>
+    </div>
+
+    <!--<div style="display:flex">
+      <div class="die_face" id="die_1">
+        <span class="pip"></span>
+      </div>
+
+      <div style="margin-left:10px;" class="die_face" id="die_2">
+        <span class="pip"></span>
+        <span class="pip"></span>
+        <span class="pip"></span>
+        <span class="pip"></span>
+        <span class="pip"></span>
+        <span class="pip"></span>
+      </div>
+    </div>-->
+  </div>
+</div>
+<div id="left_information">
+  Join the <a href="https://discord.gg/fp5bcCqg8q" target="_blank"><i class="fa-brands fa-discord"></i> Discord!</a><br />
+  Check out <a href="https://smashmonopoly.com" target="_blank">Smash Monopoly!</a><br />
+  If you enjoy consider <a href="https://paypal.me/elxando" target="_blank">buying the dev a coffee?</a>
+</div>
+<div id="information">
+  Idea and graphics by <a href="https://www.youtube.com/c/LittleZubat" target="_blank">Little Z</a><br />
+  Programming by <a href="https://www.youtube.com/ElXando1993" target="_blank">El Xando</a>
+</div>
+
+</body>
+<script src="js/chess.js?v=2.37"></script>
+</html>
