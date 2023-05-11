@@ -378,19 +378,8 @@ function loadImages(){
     });
 
     socket.on('takeResult', (pieceIndex, moveIndex, hitType) => {
-        if (hitType == 'miss'){
-            //setCurrentPiece();
-            //showMessage('Missed!', 2000);
-            currentPiece = boardArray[pieceIndex].piece;
-            currentPiece.move(moveIndex, hitType);
-            //nextPlayer();
-        } else {
-            currentPiece = boardArray[pieceIndex].piece;
-            currentPiece.move(moveIndex, hitType);
-            if (hitType == 'critical'){
-                //showMessage('Critical!', 2000);
-            }
-        }
+        currentPiece = boardArray[pieceIndex].piece;
+        currentPiece.move(moveIndex, hitType);
     });
 
     $('#randomise_all').click(function(){
@@ -445,6 +434,7 @@ function loadImages(){
     });
 
     $('#promotion_choice').on('click', 'img', function(){
+        chessSettings.wait = false;
         let newType = $(this).data('type');
         currentPiece.type = Type[newType];
         currentPiece.promotion = true;
@@ -959,7 +949,7 @@ function GamePiece(typeEnum, sideEnum) {
         }
 
         chessSettings.enPassant = undefined;
-
+        chessSettings.wait = false;
         chessSettings.lockPiece = false;
         chessSettings.critical = false;
 
@@ -1069,6 +1059,7 @@ function GamePiece(typeEnum, sideEnum) {
             if (getY(targetIndex) == 0 || getY(targetIndex) == 7){
                 promotion = true;
                 if (this.side == chessSettings.side && !chessSettings.spectator){
+                    chessSettings.wait = true;
                     $('#promotion_choice').html($('#promotion_choice').html().split(otherSide.file).join(this.side.file));
                     $('#promotion_choice').removeClass('hidden');
                 }
@@ -1451,7 +1442,9 @@ function selectPiece(event) {
             }
         }
     } else if (currentPlayer !== chessSettings.side){
-        console.log('not your turn mate');
+        console.log('It is the opponents turn.');
+    } else if (chessSettings.wait){
+        console.log('Please wait.');
     } else if(currentPiece && selectedPiece) {
         if (selectedPiece.side == currentPlayer) {
             if(currentPiece.type == "rook" && selectedPiece.type == "king" && currentPiece.isValidMove(boardIndex)) {
@@ -1483,6 +1476,7 @@ function selectPiece(event) {
                 socket.emit('nextPlayer');*/
             } else {
                 socket.emit('attemptTake', currentPiece.getIndex(), boardIndex);
+                chessSettings.wait = true;
             }
 
         } else {
@@ -1505,6 +1499,7 @@ function selectPiece(event) {
                     currentPiece.move(boardIndex, 'none');
                 } else {
                     socket.emit('attemptTake', currentPiece.getIndex(), boardIndex);
+                    chessSettings.wait = true;
                 }
             } else {
                 console.log("Valid move, moving piece.");
