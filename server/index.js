@@ -33,8 +33,6 @@ io.on('connection', (socket) => {
             return room.socketid !== socket.id;
         });
         const [,thisRoom] = socket.rooms;
-        console.log('they were in ' + thisRoom);
-        console.log('spectator? ' + socket.data.spectator)
         if (thisRoom){
             if (!socket.data.spectator){
                 io.to(thisRoom).emit('playerLeft');
@@ -42,7 +40,7 @@ io.on('connection', (socket) => {
                     return room.code !== thisRoom;
                 });
             } else {
-                let leftRoom = spectationRooms.find(function(room){return room.code == thisRoom});
+                let leftRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
                 if (leftRoom){
                     // remove this socket name from spectators list
                     leftRoom.spectators = leftRoom.spectators.filter(function(spectator){
@@ -68,9 +66,12 @@ io.on('connection', (socket) => {
         socket.emit('spectationRooms', spectationRooms);
     });
 
-    socket.on('createRoom', (roomName, password, winRate) => {
+    socket.on('createRoom', (roomName, password, winRate, no_rng, random_teams, timer_setting) => {
         let roomCode = Math.random().toString(36).substring(2, 10);
         socket.join(roomCode);
+        let timerSplit = timer_setting.split('|'),
+            timerMillis = parseInt(timerSplit[0]) * 60000,
+            timerAdd = timerSplit[1] ? parseInt(timerSplit[1]) : 0;
         availableRooms.push({
             socketid: socket.id,
             host: socket.data.name,
@@ -78,18 +79,27 @@ io.on('connection', (socket) => {
             name: roomName,
             password: password,
             spectators: [],
-            winRate: winRate
+            winRate: winRate,
+            no_rng: no_rng,
+            random_teams: random_teams,
+            timer_setting: timer_setting,
+            timer_millis: timerMillis,
+            timer_add: timerAdd * 1000
         });
+        console.log(timerMillis);
+        console.log(timerAdd);
     });
 
     socket.on('joinRoom', (roomCode, password) => {
-        let wantedRoom = availableRooms.find(function(room){return room.code == roomCode});
+        let wantedRoom = availableRooms.find(function(room){return room.code == roomCode;});
         if (!wantedRoom){
             console.log('Cant find ' + roomCode);
             socket.emit('noRoom');
         } else {
             if (!wantedRoom.password || password == wantedRoom.password){
                 wantedRoom.secondary = socket.data.name;
+                wantedRoom.hostRemaining = wantedRoom.timer_millis;
+                wantedRoom.secondaryRemaining = wantedRoom.timer_millis;
                 spectationRooms.push(wantedRoom);
                 console.log('join success');
                 availableRooms = availableRooms.filter(function(room){
@@ -98,11 +108,13 @@ io.on('connection', (socket) => {
                 socket.join(wantedRoom.code);
                 wantedRoom.hostSide = Math.random() < 0.5 ? 'LIGHT' : 'DARK';
                 wantedRoom.enemySide = wantedRoom.hostSide == 'DARK' ? 'LIGHT' : 'DARK';
-                socket.to(wantedRoom.code).emit('playerJoined', socket.data.name, wantedRoom.hostSide);
-                socket.emit('playerJoined', wantedRoom.host, wantedRoom.enemySide);
-                draftTimers[wantedRoom.code] = setTimeout(function(){
-                    io.to(wantedRoom.code).emit('draftTimeExpired');
-                }, 180000);
+                socket.to(wantedRoom.code).emit('playerJoined', socket.data.name, wantedRoom.hostSide, wantedRoom.random_teams);
+                socket.emit('playerJoined', wantedRoom.host, wantedRoom.enemySide, wantedRoom.random_teams);
+                if (!wantedRoom.random_teams){
+                    draftTimers[wantedRoom.code] = setTimeout(function(){
+                        io.to(wantedRoom.code).emit('draftTimeExpired');
+                    }, 180000);
+                }
             } else {
                 console.log('wrong pass');
                 console.log(password);
@@ -113,7 +125,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('spectate', (roomCode, password) => {
-        let wantedRoom = spectationRooms.find(function(room){return room.code == roomCode});
+        let wantedRoom = spectationRooms.find(function(room){return room.code == roomCode;});
         if (!wantedRoom){
             socket.emit('noRoom');
         } else {
@@ -130,31 +142,57 @@ io.on('connection', (socket) => {
 
     socket.on('ready', (types) => {
         const [,thisRoom] = socket.rooms;
+        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
         socket.to(thisRoom).emit('enemyReady', types);
+        if (theRoom.socketid == socket.id){
+            theRoom.hostReady = true;
+        } else {
+            theRoom.secondaryReady = true;
+        }
+        if (theRoom.hostReady && theRoom.secondaryReady){
+            io.to(thisRoom).emit('startGame');
+            if (theRoom.hostSide == 'LIGHT'){
+                theRoom.hostStart = Date.now();
+            } else {
+                theRoom.secondaryStart = Date.now();
+            }
+        }
     });
     socket.on('unready', () => {
         const [,thisRoom] = socket.rooms;
+        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
         socket.to(thisRoom).emit('enemyUnready');
+        if (theRoom.socketid == socket.id){
+            theRoom.hostReady = false;
+        } else {
+            theRoom.secondaryReady = false;
+        }
     });
     socket.on('normalMove', (pieceIndex, moveIndex, hitType) => {
         const [,thisRoom] = socket.rooms;
+        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
         socket.to(thisRoom).emit('normalMove', pieceIndex, moveIndex, hitType);
+        hitClock(socket, theRoom);
     });
     socket.on('attemptTake', (pieceIndex, moveIndex) => {
         const [,thisRoom] = socket.rooms;
+        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
         let hitType = 'normal';
-        if (~~(Math.random() * 16) == 0){
-            hitType = 'critical';
-        } else if (~~(Math.random() * 10) == 0){
-            hitType = 'miss';
+        if (!theRoom.no_rng){
+            if (~~(Math.random() * 16) == 0){
+                hitType = 'critical';
+            } else if (~~(Math.random() * 10) == 0){
+                hitType = 'miss';
+            }    
         }
 
         io.to(thisRoom).emit('takeResult', pieceIndex, moveIndex, hitType);
+        hitClock(socket, theRoom);
         //socket.emit('takeResult', pieceIndex, moveIndex, hitType);
     });
     socket.on('promotion', (pieceIndex, newType) => {
         const [,thisRoom] = socket.rooms;
-        socket.to(thisRoom).emit('promotion', pieceIndex, newType)
+        socket.to(thisRoom).emit('promotion', pieceIndex, newType);
     });
     socket.on('syncSpectators', (boardArray, chessSettings, currentPlayer) => {
         const [,thisRoom] = socket.rooms;
@@ -198,12 +236,33 @@ io.on('connection', (socket) => {
     socket.on('nextPlayer', () => {
         const [,thisRoom] = socket.rooms;
         socket.to(thisRoom).emit('nextPlayer');
+        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        hitClock(socket, theRoom);
     });
     socket.on('castle', (rookIndex, nextIndex, kingIndex, newIndex) => {
         const [,thisRoom] = socket.rooms;
         io.to(thisRoom).emit('castle', rookIndex, nextIndex, kingIndex, newIndex);
+        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        hitClock(socket, theRoom);
     });
 });
+
+function hitClock(socket, room){
+    console.log(room.socketid);
+    console.log(socket.id);
+    if (room.socketid == socket.id){
+        room.hostRemaining = room.hostRemaining - (Date.now() - room.hostStart);
+        room.hostRemaining += room.timer_add;
+        room.secondaryStart = Date.now();
+    } else {
+        room.secondaryRemaining = room.secondaryRemaining - (Date.now() - room.secondaryStart);
+        room.secondaryRemaining += room.timer_add;
+        room.hostStart = Date.now();
+    }
+    console.log(room.hostRemaining);
+    console.log(room.secondaryRemaining);
+    io.to(room.code).emit('timerUpdate', room.hostRemaining, room.secondaryRemaining);
+}
 
 httpServer.listen(2999, () => {
     console.log('listening on *:2999');

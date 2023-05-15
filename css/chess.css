@@ -136,12 +136,13 @@ div.button {
 }
 
 input[type=text], select{
-    padding:12px 20px;
+    padding:2px;
     margin:8px 0;
     border:1px solid #ccc;
     border-radius:4px;
     box-sizing:border-box;
-    width:100%;
+    width:80%;
+    max-width:300px;
 }
 
 .styled-table {
@@ -276,4 +277,17 @@ input[type=text], select{
 }
 #player_gif img, #enemy_gif img{
     width:100%;
+}
+.dataTables_wrapper .dataTables_filter input{
+    background-color:white !important;
+}
+h3{
+    margin-bottom:0;
+}
+#room_settings tr td:first-of-type{
+    text-align:right;
+    padding-right:5px;
+}
+#room_settings td{
+    width:250px;
 }

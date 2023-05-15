@@ -96,7 +96,7 @@ let bad_words = ['nigger', 'nlgger', 'chink', 'coon', 'n1gger', 'n1gg3r', 'nigg3
 let imagesLoaded;
 
 function anyBadWords(checkText){
-    for (badWord of bad_words){
+    for (let badWord of bad_words){
         if (checkText.toLowerCase().includes(badWord)){
             localStorage.setItem('name', 'Worthless Human');
             localStorage.setItem('losses', '999999');
@@ -129,10 +129,22 @@ function imageLoaded(){
     imagesLoaded++;
     if (imagesLoaded == 174){
         $('#preloading_images').remove();
+        $('#images_loaded').removeClass('hidden');
     }
 }
 
 function loadImages(){
+    // Update div check
+    let updates = JSON.parse(localStorage.getItem('updates'));
+    if (!updates){
+        updates = [];
+    }
+    $('.update_div').each(function(){
+        if (!updates.includes($(this).data('date'))){
+            $(this).removeClass('hidden');
+        }
+    });
+
     imagesLoaded = 0;
     for (const pieceType in Type) {
         for (const colour in Side) {
@@ -172,6 +184,11 @@ function loadImages(){
             clearInterval(dice_roll);
         }
     }, 50);*/
+    $('#start_host').click(function(){
+        $(this).addClass('hidden');
+        $('#room_settings').removeClass('hidden');
+        $('#host_game').removeClass('hidden');
+    });
 
     $('#host_game').click(function(){
         if (badNameCheck()){
@@ -185,7 +202,7 @@ function loadImages(){
             return;
         }
 
-        if ($('#roomName').val()){
+        if ($('#roomName').val().trim()){
             let roomName = $('#roomName').val();
             roomName = roomName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             let wins = parseInt(localStorage.getItem('wins'));
@@ -199,17 +216,24 @@ function loadImages(){
             } else if (!isNaN(losses)){
                 winRate = '0%';
             }
-            socket.emit('createRoom', roomName, $('#roomPassword').val(), winRate);
+            //no_rng, random_teams, timer_setting
+            let no_rng = $('#no_rng').hasClass('fa-toggle-on'),
+                random_teams = $('#random_teams').hasClass('fa-toggle-on'),
+                timer_setting = $('#timer_setting').val();
+            socket.emit('createRoom', roomName, $('#roomPassword').val(), winRate, no_rng, random_teams, timer_setting);
             $('#setup_div').addClass('hidden');
             $('#game').removeClass('hidden');
             chessSettings.host = true;
+            chessSettings.random_teams = random_teams;
             chessSettings.side = Side.LIGHT;
             setupGame();
+        } else {
+            alert('Enter a room name!');
         }
     });
 
     $('#yourName').on('focusout', function(){
-        if ($(this).val()){
+        if ($(this).val().trim()){
             $(this).val($(this).val().replace(/</g, "&lt;").replace(/>/g, "&gt;"));
             try {
                 localStorage.setItem('name', $(this).val());
@@ -261,15 +285,20 @@ function loadImages(){
     }
 
     socket.on('availableRooms', (availableRooms) => {
+        //$('#available_table').DataTable().destroy();
         $('#available_count').html('(' + availableRooms.length + ')');
         $('#room_list').html('');
         for (const room of availableRooms){
-            let hasPassword = room.password ? 'T': 'F';
-            $('#room_list').append('<tr class="pointer" data-pass="'+hasPassword+'" data-code="'+room.code+'"><td>'+room.host+'</td><td>'+room.name+'</td><td>'+room.winRate+'</td><td><i class="fa fa-lock'+(hasPassword == 'T' ? '' : 'open')+'"></i></td></tr>');
+            let no_rng = room.no_rng ? 'fa-toggle-on' : 'fa-toggle-off',
+                random_teams = room.random_teams ? 'fa-toggle-on' : 'fa-toggle-off';
+            $('#room_list').append('<tr class="pointer" data-pass="'+(room.password ? 'T' : 'F')+'" data-code="'+room.code+'"><td>'+room.host+
+                '</td><td>'+room.name+'</td><td>'+room.winRate+'</td><td data-order="' + (room.password ? '1' : '0') + '">'+
+                '<i class="fa fa-lock'+(room.password ? '' : '-open')+'"></i></td><td><i class="fa '+no_rng+'"></i></td><td><i class="fa '+random_teams+'"></i></td><td>'+room.timer_setting+'</tr>');
         }
         if (!availableRooms.length){
             $('#room_list').append('<tr><td colspan="100%">No rooms currently available.</td></tr>');
         }
+        //$('#available_table').DataTable({dom: 'ft', paging: false, columnDefs: [{className: 'dt-head-center', targets: '_all'}]});
         setTimeout(function(){
             $('.reload-rooms').removeClass('fa-spin');
         }, 1000);
@@ -298,15 +327,18 @@ function loadImages(){
     });
 
     socket.on('spectationRooms', (spectationRooms) => {
+        //$('#spectate_table').DataTable().destroy();
         $('#spectate_count').html('(' + spectationRooms.length + ')');
         $('#spectate_list').html('');
         for (const room of spectationRooms){
             let hasPassword = room.password ? 'T' : 'F';
-            $('#spectate_list').append('<tr class="pointer" data-pass="'+hasPassword+'" data-code="'+room.code+'"><td style="max-width:300px;overflow:hidden;">'+room.host+'</td><td>'+room.secondary+'</td><td>'+room.name+'</td><td><i class="fa fa-lock'+(hasPassword == 'T' ? '' : 'open') +'"></i></td></tr>');
+            $('#spectate_list').append('<tr class="pointer" data-pass="'+hasPassword+'" data-code="'+room.code+'"><td>'+room.host+'</td><td>'+room.secondary+
+                '</td><td>'+room.name+'</td><td data-order="' + (hasPassword == 'T' ? '1' : '0') + '"><i class="fa fa-lock'+(hasPassword == 'T' ? '' : '-open') +'"></i></td></tr>');
         }
         if (!spectationRooms.length){
             $('#spectate_list').append('<tr><td colspan="100%">No games in progress.</td></tr>');
         }
+        //$('#spectate_table').DataTable({dom: 'ft', paging: false, columnDefs: [{className: 'dt-head-center', targets: '_all'}]});
         setTimeout(function(){
             $('.reload-spectate').removeClass('fa-spin');
         }, 1000);
@@ -335,7 +367,7 @@ function loadImages(){
         }
     });
 
-    socket.on('playerJoined', (playerName, side) => {
+    socket.on('playerJoined', (playerName, side, random_teams) => {
         $('#setup_div').addClass('hidden');
         $('#game').removeClass('hidden');
         if (!boardArray[0]){
@@ -345,8 +377,14 @@ function loadImages(){
         drawAll();
         chessSettings.enemyName = playerName;
         $('#enemy_name').html(playerName);
-        $('#piece_setup_div').removeClass('hidden');
-        startDraftTimer();
+        if (random_teams){
+            $('#randomise_all').click();
+            $('#player_ready').click();
+        } else {
+            $('#piece_setup_div').removeClass('hidden');
+            startDraftTimer();    
+        }
+        
     });
 
     socket.on('enemyReady', (types) => {
@@ -354,15 +392,13 @@ function loadImages(){
         $('#enemy_ready').removeClass('unready').addClass('ready').html('Ready <i class="fa fa-thumbs-up"></i>');
         chessSettings.enemyTypes = types;
         if (chessSettings.ready){
-            //startCountdown();
-            startGame();
+            //startGame();
         }
     });
 
     socket.on('enemyUnready', () => {
         $('#enemy_ready').addClass('unready').removeClass('ready').html('Unready <i class="fa fa-thumbs-down"></i>');
         chessSettings.enemyTypes = undefined;
-        //cancelCountdown();
     });
 
     socket.on('normalMove', (pieceIndex, moveIndex, hitType) => {
@@ -525,7 +561,7 @@ function loadImages(){
             } else {
                 $('#player_clock').html(millisToClock(chessSettings.playerRemaining));
                 $('#enemy_clock').html(millisToClock(chessSettings.enemyRemaining));
-                hitClock(true);
+                //hitClock(true);
             }
         }
     });
@@ -628,8 +664,7 @@ function loadImages(){
                 socket.emit('ready', boardArray.slice(48,64).reverse().map(function(boardSlot){return boardSlot.piece.pokemon_type.type;}));
             }
             if (chessSettings.enemyTypes){
-                //startCountdown();
-                startGame();
+                //startGame();
             }
         } else {
             $(this).addClass('unready').removeClass('ready');
@@ -638,7 +673,6 @@ function loadImages(){
             $('#piece_setup_div').removeClass('hidden');
             chessSettings.ready = false;
             socket.emit('unready');
-            //cancelCountdown();
         }
     });
 
@@ -664,6 +698,45 @@ function loadImages(){
         $('.board_message').addClass('hidden');
         $('#opponent_disconnected').removeClass('hidden');
         $('#game').css('pointer-events', '');
+    });
+    
+    $('.toggle').click(function(){
+        if ($(this).hasClass('fa-toggle-on')){
+            $(this).removeClass('fa-toggle-on').addClass('fa-toggle-off');
+        } else {
+            $(this).addClass('fa-toggle-on').removeClass('fa-toggle-off');
+        }
+    });
+    
+    socket.on('startGame', () => {
+        startGame(); 
+    });
+    
+    socket.on('timerUpdate', (hostRemaining, secondaryRemaining) => {
+        console.log('host: ' + hostRemaining);
+        console.log('second: ' + secondaryRemaining);
+        if (chessSettings.host){
+            chessSettings.playerRemaining = hostRemaining;
+            chessSettings.enemyRemaining = secondaryRemaining;
+        } else {
+            chessSettings.playerRemaining = secondaryRemaining;
+            chessSettings.enemyRemaining = hostRemaining;
+        }
+        clearInterval(chessSettings.clock);
+        $('#player_clock').html(millisToClock(chessSettings.playerRemaining));
+        $('#enemy_clock').html(millisToClock(chessSettings.enemyRemaining));
+        hitClock();
+    });
+
+    $('.dismiss_update').click(function(){
+        let update_date = $(this).data('date'),
+            updates = JSON.parse(localStorage.getItem('updates'));
+        if (!updates){
+            updates = [];
+        }
+        updates.push(update_date);
+        $('.update_div[data-date="'+update_date+'"]').addClass('hidden');
+        localStorage.setItem('updates', JSON.stringify(updates));
     });
 }
 
@@ -711,6 +784,7 @@ function rematch(){
     $('#win_message').addClass('hidden');
     $('#player_taken, #enemy_taken').html('');
     $('#promotion_choice').addClass('hidden');
+    chessSettings.wait = false;
     if (!chessSettings.spectator){
         chessSettings.gameOver = false;
         chessSettings.enemyTypes = undefined;
@@ -739,24 +813,6 @@ function showMessage(message, time){
     }
 }
 
-function startCountdown(){
-    if (chessSettings.audio){
-        chessSettings.audio.pause();
-    }
-    chessSettings.audio = new Audio('audio/countdown.mp3');
-    chessSettings.audio.play();
-    chessSettings.countdown = 3;
-    $('#mid_board').html(chessSettings.countdown);
-    chessSettings.startCountdown = setInterval(function(){
-        chessSettings.countdown--;
-        $('#mid_board').html(chessSettings.countdown);
-        if (chessSettings.countdown == 0){
-            clearInterval(chessSettings.startCountdown);
-            startGame();
-        }
-    }, 1000);
-}
-
 function startGame(){
     chessSettings.startTime = Date.now();
     $('#mid_board').html('');
@@ -771,12 +827,15 @@ function startGame(){
     });
     chessSettings.started = true;
     //if (chessSettings.side === Side.LIGHT){
-    chessSettings.playerStart = Date.now();
+    //chessSettings.playerStart = Date.now();
     //} else {
-    chessSettings.enemyStart = Date.now();
+    //chessSettings.enemyStart = Date.now();
     //}
     chessSettings.playerRemaining = 600000;
     chessSettings.enemyRemaining = 600000;
+    if (chessSettings.clock){
+        clearInterval(chessSettings.clock);
+    }
     $('#enemy_clock, #player_clock').html('10:00.0');
     hitClock();
     if (chessSettings.host && !chessSettings.spectator){
@@ -786,7 +845,7 @@ function startGame(){
 
 function hitClock(noSet){
     console.log('clock hit');
-    if (chessSettings.clock){
+    /*if (chessSettings.clock){
         clearInterval(chessSettings.clock);
         if (currentPlayer !== chessSettings.side && !noSet){
             chessSettings.playerRemaining = chessSettings.playerRemaining - (Date.now() - chessSettings.playerStart);
@@ -795,22 +854,23 @@ function hitClock(noSet){
             chessSettings.enemyRemaining = chessSettings.enemyRemaining - (Date.now() - chessSettings.enemyStart);
             chessSettings.playerStart = Date.now();
         }
-    }
+    }*/
 
     let id = '#player_clock';
     if (currentPlayer !== chessSettings.side){
         id = '#enemy_clock';
     }
+    chessSettings.clockStart = Date.now();
     console.log(id);
     chessSettings.clock = setInterval(function(){
         let remainingTime;
         if (id === '#player_clock'){
-            remainingTime = chessSettings.playerRemaining - (Date.now() - chessSettings.playerStart);
+            remainingTime = chessSettings.playerRemaining - (Date.now() - chessSettings.clockStart);
         } else {
-            remainingTime = chessSettings.enemyRemaining - (Date.now() - chessSettings.enemyStart);
+            remainingTime = chessSettings.enemyRemaining - (Date.now() - chessSettings.clockStart);
         }
 
-        if (remainingTime <= 0){
+        /*if (remainingTime <= 0){
             let winnerName = chessSettings.side == currentPlayer ? chessSettings.enemyName : chessSettings.playerName;
             $('#winner_name').html(winnerName + ' wins!');
             $('#rematch_wanted').html('');
@@ -819,18 +879,10 @@ function hitClock(noSet){
             $(id).html('00:00.0');
             clearInterval(chessSettings.clock);
             return;
-        }
+        }*/
 
         $(id).html(millisToClock(remainingTime));
     }, 100);
-}
-
-function cancelCountdown(){
-    clearInterval(chessSettings.startCountdown);
-    if (chessSettings.audio){
-        chessSettings.audio.pause();
-    }
-    $('#mid_board').html('');
 }
 
 function gameOver(winnerSide){
@@ -1390,7 +1442,7 @@ function nextPlayer() {
         } else if (chessSettings.enemyStart && !chessSettings.playerStart){
             chessSettings.playerStart = Date.now();
         }*/
-        hitClock();
+        //hitClock();
     }
 
 }

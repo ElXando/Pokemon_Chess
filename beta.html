@@ -1,4 +1,4 @@
-﻿
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,33 +26,67 @@
 </head>
 <body onload="loadImages()">
 <div class="content">
+  <div class="hidden update_div" data-date="20230515">
+    15th May 2023 Updates:
+    <ul style="list-style-position:inside;">
+      <li>Room options! Disable RNG, enforce random teams and choose from 3 different timer options.</li>
+      <li>Timer fixes, now kept track of on the server instead of on each client.</li>
+      <li>Move related gifs and audio now preloaded so shouldn't be late the first time.</li>
+    </ul>
+    <a href="#" class="dismiss_update" data-date="20230515">Click here to dismiss.</a>
+  </div>
   <div style="width:100%">
     <img src="img/Pokemon%20Chess%20Logo.webp" height="300px" style="margin:10px;" />
   </div>
-  <a href="https://pokemonchess.com">Wrong site! Click here to go to the correct one, if you're seeing this message anyway clear your DNS cache.</a>
 
-  <div id="setup_div" class="hidden">
-    <span id="preloading_images">Preloading images! Please wait for this message to disappear before trying to host or join.</span>
-    <br />
+  <div id="setup_div" class="">
+      <span id="preloading_images">Preloading images! Please wait...</span>
+    <div id="images_loaded" class="hidden">
     <input maxlength="30" type="text" id="yourName" placeholder="Your Name (Enter to see rooms)" />
-    <br />
-    <input maxlength="30" type="text" id="roomName" placeholder="Room Name" />
-    <br />
-    <input type="text" id="roomPassword" placeholder="Password (Optional)" />
-    <br />
+    
 
     <div id="has_name" class="hidden">
-      <button id="host_game" class="button-1">Host Game</button>
+        <button id="start_host" class="button-1">Host Game</button>
+        
+        <table style="margin:0 auto;" id="room_settings" class="hidden">
+        <tbody>
+          <tr>
+            <td>Room Name</td>
+              <td><input maxlength="30" type="text" id="roomName" placeholder="Room Name" /></td>
+        </tr>
+         <tr>
+            <td>Room Password</td>
+             <td><input type="text" id="roomPassword" placeholder="Password (Optional)" /></td>
+            </tr>
+        <tr>
+            <td>Disable Critical Hits & Misses</td>
+            <td><i id="no_rng" class="no_rng toggle pointer fa-solid fa-toggle-off fa-2x"></i></td>
+            </tr>
+        <tr>
+            <td>Random Teams</td>
+            <td><i id="random_teams" class="toggle pointer fa-solid fa-toggle-off fa-2x"></i></td>
+            </tr>
+            <tr>
+            <td>Timer</td>
+                <td><select id="timer_setting"><option value="10">10 mins</option><option value="3|2">3 | 2</option><option value="">None</option></select></td>
+            </tr>
+        </tbody>
+      </table>
+        
+      <button id="host_game" class="button-1 hidden">Host Game</button>
       <br />
       <h3>Available Rooms <span id="available_count">()</span> <i class="fa fa-rotate reload-rooms pointer"></i></h3>
 
       <table id="available_table" class="styled-table" style="width:800px;">
         <thead>
         <tr>
-          <th>Host</th>
-          <th>Room Name</th>
-          <th>Win Rate</th>
-          <th>Type</th>
+            <th>Host</th>
+            <th>Room Name</th>
+            <th>Win Rate</th>
+            <th><i class="fa fa-key"></i></th>
+            <th>No RNG</th>
+            <th>Random Teams</th>
+            <th>Timer</th>
         </tr>
         </thead>
         <tbody id="room_list">
@@ -76,6 +110,8 @@
         </tbody>
       </table>
     </div>
+        
+      </div>
 
 
   </div>
@@ -173,5 +209,5 @@
 </div>
 
 </body>
-<!--<script src="js/chess.js?v=2.43"></script>-->
+<script src="js/chess.js?v=2.43"></script>
 </html>
