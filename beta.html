@@ -17,7 +17,7 @@
   <link rel="shortcut icon" href="favicon.ico">
 
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
-  <script src="js/socket.io.min.js"></script>
+  <script src="js/socket.io.min.js?v=2"></script>
   <script src="js/md5.min.js"></script>
   <link href="css/chess.css?v=2" rel="stylesheet" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" rel="stylesheet" />
@@ -138,7 +138,7 @@
       </div>
       <div id="you_disconnected" class="hidden board_message">
         <b>You have disconnected for reason: <span id="disconnect_reason"></span></b><br />
-        Try to keep the tab active.<br /><br />
+        Attempting to reconnect...<br /><br />
         <button onclick="location.reload()" class="button-1">Reload</button>
       </div>
       <div id="skip_move_hint" class="hidden board_message">
@@ -162,6 +162,7 @@
     <button id="player_ready" class="button-1 unready hidden">Ready <i class="fa fa-thumbs-up"></i></button>
     <button id="skip_move" class="button-1 hidden">Skip Additional Move</button>
     <h1 id="player_name"></h1>
+    <button id="forfeit_game" class="button-1 hidden">Forfeit</button>
     <div class="hidden" id="types"></div>
     <div id="piece_setup_div" class="hidden">
       <div id="piece_choice"></div>

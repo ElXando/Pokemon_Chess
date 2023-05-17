@@ -21,24 +21,28 @@ const io = new Server(httpServer, {
 
 let availableRooms = [],
     spectationRooms = [],
-    draftTimers = {};
+    draftTimers = {},
+    winTimers = {};
 
 io.on('connection', (socket) => {
     console.log('New player: ' + socket.id);
+    console.log(socket.recovered);
 
-    socket.on('disconnecting', () => {
-        console.log(socket.id + ' has left!');
+    socket.on('disconnecting', (reason) => {
+        console.log(socket.id + ' has left for reason: ' + reason);
         // Remove from available rooms if in there
         availableRooms = availableRooms.filter(function(room){
             return room.socketid !== socket.id;
         });
         const [,thisRoom] = socket.rooms;
         if (thisRoom){
-            if (!socket.data.spectator){
+            if (!socket.data.spectator && reason == 'client namespace disconnect'){
                 io.to(thisRoom).emit('playerLeft');
                 spectationRooms = spectationRooms.filter(function(room){
                     return room.code !== thisRoom;
                 });
+                delete draftTimers[thisRoom];
+                delete winTimers[thisRoom];
             } else {
                 let leftRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
                 if (leftRoom){
@@ -113,6 +117,7 @@ io.on('connection', (socket) => {
                 if (!wantedRoom.random_teams){
                     draftTimers[wantedRoom.code] = setTimeout(function(){
                         io.to(wantedRoom.code).emit('draftTimeExpired');
+                        delete draftTimers[wantedRoom.code];
                     }, 180000);
                 }
             } else {
@@ -193,6 +198,8 @@ io.on('connection', (socket) => {
     socket.on('promotion', (pieceIndex, newType) => {
         const [,thisRoom] = socket.rooms;
         socket.to(thisRoom).emit('promotion', pieceIndex, newType);
+        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        hitClock(socket, theRoom);
     });
     socket.on('syncSpectators', (boardArray, chessSettings, currentPlayer) => {
         const [,thisRoom] = socket.rooms;
@@ -230,6 +237,7 @@ io.on('connection', (socket) => {
             }
             draftTimers[theRoom.code] = setTimeout(function(){
                 io.to(theRoom.code).emit('draftTimeExpired');
+                delete draftTimers[theRoom.code];
             }, 180000);
         }
     });
@@ -248,20 +256,28 @@ io.on('connection', (socket) => {
 });
 
 function hitClock(socket, room){
-    console.log(room.socketid);
-    console.log(socket.id);
+    let timerRemaining, timerSide;
     if (room.socketid == socket.id){
         room.hostRemaining = room.hostRemaining - (Date.now() - room.hostStart);
         room.hostRemaining += room.timer_add;
         room.secondaryStart = Date.now();
+        timerRemaining = room.hostRemaining;
+        timerSide = room.enemySide;
     } else {
         room.secondaryRemaining = room.secondaryRemaining - (Date.now() - room.secondaryStart);
         room.secondaryRemaining += room.timer_add;
         room.hostStart = Date.now();
+        timerRemaining = room.secondaryRemaining;
+        timerSide = room.hostSide;
     }
-    console.log(room.hostRemaining);
-    console.log(room.secondaryRemaining);
     io.to(room.code).emit('timerUpdate', room.hostRemaining, room.secondaryRemaining);
+    if (winTimers[room.code]){
+        clearInterval(winTimers[room.code]);
+    }
+    winTimers[room.code] = setTimeout(function(){
+        io.to(room.code).emit('timerExpired', timerSide);
+        delete winTimers[room.code];
+    }, timerRemaining);
 }
 
 httpServer.listen(2999, () => {

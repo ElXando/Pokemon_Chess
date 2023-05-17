@@ -86,6 +86,13 @@ const pokemon_types = [
     check music keeps playing after win - maybe because of super effective? - fixed
     show missed / no effect move attempt - done
 
+
+    v2
+    audio play loaded in elements rather than creating new object
+    win timer on server
+    queen promote kill - done
+    team builder
+    back to menu
 */
 
 let socket;
@@ -94,6 +101,12 @@ let protected_names = ['el xando', 'ei xando', 'little z', 'littie z', 'hopcat',
 let bad_words = ['nigger', 'nlgger', 'chink', 'coon', 'n1gger', 'n1gg3r', 'nigg3r', 'golliwog', 'niglet', 'c00n', 'retard', '<script', '/script>'];
 
 let imagesLoaded;
+
+let gifList = ['bishop missed', 'bishop none', 'king missed', 'king none', 'knight missed', 'knight none', 'pawn missed', 'pawn none',
+    'queen missed', 'queen none', 'rook missed', 'rook none', 'critical', 'not-very', 'super'];
+let audioList = ['check', 'critical', 'missed', 'nope', 'not-very', 'plink', 'promotion', 'super'];
+
+let gifs = {}, audios = {};
 
 function anyBadWords(checkText){
     for (let badWord of bad_words){
@@ -130,6 +143,33 @@ function imageLoaded(){
     if (imagesLoaded == 174){
         $('#preloading_images').remove();
         $('#images_loaded').removeClass('hidden');
+    }
+}
+
+function preloadMessages(){
+    if (gifList.length){
+        let gifToLoad = gifList[gifList.length-1];
+        gifList.pop();
+        gifs[gifToLoad] = new Image();
+        gifs[gifToLoad].onload = preloadMessages;
+        gifs[gifToLoad].src = 'gifs/' + gifToLoad + '.gif';
+    } else if (audioList.length){
+        let audioToLoad = audioList[audioList.length-1];
+        audioList.pop();
+        audios[audioToLoad] = new Audio();
+        audios[audioToLoad].oncanplaythrough = preloadMessages;
+        switch (audioToLoad){
+            case 'check':
+                audios[audioToLoad].volume = 0.2;
+                break;
+            case 'promotion':
+                audios[audioToLoad].volume = 0.5;
+                break;
+            case 'plink':
+                audios[audioToLoad].volume = 0.3;
+                break;
+        }
+        audios[audioToLoad].src = 'audio/' + audioToLoad + '.mp3';
     }
 }
 
@@ -172,18 +212,6 @@ function loadImages(){
         }
     }
 
-    /*let loops = 0;
-    let pip = '<span class="pip"></span>';
-    let dice_roll = setInterval(function () {
-        let die1 = ~~(Math.random() * 6) + 1,
-            die2 = ~~(Math.random() * 6) + 1;
-        $('#die_1').html(pip.repeat(die1));
-        $('#die_2').html(pip.repeat(die2));
-        loops++;
-        if (loops === 100) {
-            clearInterval(dice_roll);
-        }
-    }, 50);*/
     $('#start_host').click(function(){
         $(this).addClass('hidden');
         $('#room_settings').removeClass('hidden');
@@ -253,17 +281,18 @@ function loadImages(){
     });
 
     socket = io('https://elxando.co.uk:2999', {
-        cors: {
+        /*cors: {
             origin: 'https://elxando.co.uk',
             methods: ['GET', 'POST']
-        },
-        timeout: 5000,
-        reconnectionDelayMax: 60000,
-        reconnection: true
+        },*/
+        timeout: 5000
     });
 
     socket.on('connect', () => {
         console.log('recovered?', socket.recovered);
+        if (socket.recovered){
+            $('#you_disconnected').addClass('hidden');
+        }
     });
 
     socket.on('disconnect', (reason) => {
@@ -272,6 +301,11 @@ function loadImages(){
         $('#disconnect_reason').html(reason);
         $('#you_disconnected').removeClass('hidden');
     });
+
+    window.onbeforeunload = function(){
+        console.log('unloading');
+        socket.disconnect();
+    };
 
     socket.emit('listRooms');
     socket.emit('listSpectate');
@@ -709,6 +743,7 @@ function loadImages(){
     });
     
     socket.on('startGame', () => {
+        preloadMessages();
         startGame(); 
     });
     
@@ -737,6 +772,15 @@ function loadImages(){
         updates.push(update_date);
         $('.update_div[data-date="'+update_date+'"]').addClass('hidden');
         localStorage.setItem('updates', JSON.stringify(updates));
+    });
+
+    socket.on('timerExpired', (winnerSide) => {
+        if (Side[winnerSide] == chessSettings.side){
+            //$('#player_clock').html('00:00.0');
+        } else {
+            //$('#enemy_clock').html('00:00.0');
+        }
+        gameOver(Side[winnerSide]);
     });
 }
 
@@ -814,6 +858,7 @@ function showMessage(message, time){
 }
 
 function startGame(){
+    $('#forfeit_game').removeClass('hidden');
     chessSettings.startTime = Date.now();
     $('#mid_board').html('');
     $('#enemy_ready, #player_ready').addClass('hidden');
@@ -845,6 +890,9 @@ function startGame(){
 
 function hitClock(noSet){
     console.log('clock hit');
+    if (chessSettings.gameOver){
+        return;
+    }
     /*if (chessSettings.clock){
         clearInterval(chessSettings.clock);
         if (currentPlayer !== chessSettings.side && !noSet){
@@ -1059,6 +1107,8 @@ function GamePiece(typeEnum, sideEnum) {
                 let pokemon_image = this.type + '%20' + this.pokemon_type.type + '.png';
                 if (this.type == 'pawn'){
                     pokemon_image = pokemon_image.replace('pawn', 'pawn' + this.side.file[0]);
+                } else if (this.promotion){
+                    pokemon_image = 'promote' + this.side.file[0] + '%20' + this.pokemon_type.type + '.png';
                 } else if (this.type == 'king') {
                     gameOver(otherSide);
                 }
@@ -1098,6 +1148,8 @@ function GamePiece(typeEnum, sideEnum) {
             let pokemon_image = takenType + '%20' + takenPokeType + '.png';
             if (takenType == 'pawn'){
                 pokemon_image = pokemon_image.replace('pawn', 'pawn' + otherSide.file[0]);
+            } else if (takenPiece.promotion){
+                pokemon_image = 'promote' + otherSide.file[0] + '%20' + takenPokeType + '.png';
             }
             $(takenLocation).append('<div style="background-image:url(\'img/'+takenType+'%20'+otherSide.file+'.png\')"><img src="img/' + pokemon_image + '" /></div>');
             if (takenType == 'king'){
@@ -1115,10 +1167,6 @@ function GamePiece(typeEnum, sideEnum) {
                     $('#promotion_choice').html($('#promotion_choice').html().split(otherSide.file).join(this.side.file));
                     $('#promotion_choice').removeClass('hidden');
                 }
-
-                /*setInterval(function(){
-                    $('#promotion_choice').addClass('hidden');
-                }, 3000);*/
             }
         }
 
