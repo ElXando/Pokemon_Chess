@@ -62,20 +62,61 @@ io.on('connection', (socket) => {
     });
 
     socket.on('listRooms', () => {
-        socket.emit('availableRooms', availableRooms);
+        let listRooms = [];
+        for (const room of availableRooms){
+            listRooms.push({
+                host: socket.data.name,
+                code: room.code,
+                name: room.name,
+                password: room.password ? true : false,
+                winRate: room.winRate,
+                no_rng: room.no_rng,
+                random_teams: room.random_teams,
+                timer_setting: room.timer_setting
+            });
+        }
+        socket.emit('availableRooms', listRooms);
     });
 
     socket.on('listSpectate', () => {
-        console.log('spectations: ' + spectationRooms.length);
+        let listSpectate = [];
+        for (const room of spectationRooms){
+            listSpectate.push({
+                host: socket.data.name,
+                code: room.code,
+                name: room.name,
+                password: room.password ? true : false,
+                winRate: room.winRate,
+                no_rng: room.no_rng,
+                random_teams: room.random_teams,
+                timer_setting: room.timer_setting
+            });
+        }
         socket.emit('spectationRooms', spectationRooms);
     });
 
     socket.on('createRoom', (roomName, password, winRate, no_rng, random_teams, timer_setting) => {
+        let agent = socket.handshake.headers['user-agent'],
+            ip = socket.handshake.address
+        let existingRoomForUser = availableRooms.find(function(room){
+            return room.agent == agent && room.ip == ip;
+        });
+        if (!existingRoomForUser){
+            spectationRooms.find(function(room){
+                return room.agent == agent && room.ip == ip;
+            });
+        }
+        if (existingRoomForUser){
+            socket.emit('duplicateRoom');
+            return;
+        }
         let roomCode = Math.random().toString(36).substring(2, 10);
         socket.join(roomCode);
         let timerSplit = timer_setting.split('|'),
             timerMillis = parseInt(timerSplit[0]) * 60000,
             timerAdd = timerSplit[1] ? parseInt(timerSplit[1]) : 0;
+        console.log(socket.data.name + ' created ' + roomName + ' on IP ' + socket.handshake.address);
+        console.log(socket.handshake.headers['user-agent']);
         availableRooms.push({
             socketid: socket.id,
             host: socket.data.name,
@@ -88,7 +129,9 @@ io.on('connection', (socket) => {
             random_teams: random_teams,
             timer_setting: timer_setting,
             timer_millis: timerMillis,
-            timer_add: timerAdd * 1000
+            timer_add: timerAdd * 1000,
+            ip: ip,
+            agent: agent
         });
         console.log(timerMillis);
         console.log(timerAdd);
