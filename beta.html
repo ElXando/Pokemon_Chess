@@ -29,8 +29,12 @@
   <div class="hidden update_div" data-date="20230515">
     15th May 2023 Updates:
     <ul style="list-style-position:inside;">
+      <li>Team Builder! Configure and save your teams before joining a game.</li>
       <li>Room options! Disable RNG, enforce random teams and choose from 3 different timer options.</li>
+      <li>Forfeit button! Lost your queen and salty? At least forfeit instead of rage quitting.</li>
       <li>Timer fixes, now kept track of on the server instead of on each client.</li>
+      <li>It should no longer be possible to create multiple rooms at once.</li>
+      <li>Cheater detection. If you win for seemingly no reason, they may have been trying to cheat...</li>
       <li>Move related gifs and audio now preloaded so shouldn't be late the first time.</li>
     </ul>
     <a href="#" class="dismiss_update" data-date="20230515">Click here to dismiss.</a>
@@ -47,6 +51,8 @@
 
     <div id="has_name" class="hidden">
         <button id="start_host" class="button-1">Host Game</button>
+      <br />
+        <button id="team_builder" class="button-1">Team Builder</button>
         
         <table style="margin:0 auto;" id="room_settings" class="hidden">
         <tbody>
@@ -72,7 +78,7 @@
             </tr>
         </tbody>
       </table>
-        
+
       <button id="host_game" class="button-1 hidden">Host Game</button>
       <br />
       <h3>Available Rooms <span id="available_count">()</span> <i class="fa fa-rotate reload-rooms pointer"></i></h3>
@@ -116,8 +122,9 @@
 
   </div>
   <div id="game" class="hidden">
-    <h1 id="enemy_name">Awaiting Opponent...</h1>
-    <button id="enemy_ready" class="button-1 unready" style="pointer-events:none;">Not Ready <i class="fa fa-thumbs-down"></i></button>
+    <h1 class="enemy_element" id="enemy_name">Awaiting Opponent...</h1>
+    <button id="enemy_ready" class="button-1 unready enemy_element" style="pointer-events:none;">Not Ready <i class="fa fa-thumbs-down"></i></button>
+    <button class="back_menu team_builder button-1 hidden">Back to Menu</button>
 
     <div style="width:100%;height:100%;position:relative;">
       <div id="mid_board" class="hidden"></div>
@@ -159,6 +166,7 @@
       <div class="taken_area" id="player_taken"></div>
     </div>
 
+    <button id="switch_sides" class="button-1 hidden">Switch Sides</button>
     <button id="player_ready" class="button-1 unready hidden">Ready <i class="fa fa-thumbs-up"></i></button>
     <button id="skip_move" class="button-1 hidden">Skip Additional Move</button>
     <h1 id="player_name"></h1>
@@ -210,5 +218,5 @@
 </div>
 
 </body>
-<script src="js/chess.js?v=2.43"></script>
+<script src="js/chess.js?v=2.44"></script>
 </html>

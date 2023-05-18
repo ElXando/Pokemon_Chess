@@ -11,7 +11,7 @@ const { Server } = require("socket.io");
 const httpServer = http.createServer(options);
 const io = new Server(httpServer, {
     connectionStateRecovery: {
-        maxDisconnectionDuration: 2 * 60 * 1000
+        maxDisconnectionDuration: 60 * 1000
     },
     cors: {
         origin: ['https://pokemonchess.com', 'https://elxando.co.uk', 'null'],
@@ -19,32 +19,54 @@ const io = new Server(httpServer, {
     }
 });
 
-let availableRooms = [],
-    spectationRooms = [],
+let availableRooms = {},
+    spectationRooms = {},
+    listRooms = {},
+    listSpectate = {},
     draftTimers = {},
-    winTimers = {};
+    winTimers = {},
+    reconnectTimers = {};
 
 io.on('connection', (socket) => {
     console.log('New player: ' + socket.id);
     console.log(socket.recovered);
+    if (socket.recovered){
+        const [,thisRoom] = socket.rooms;
+        if (thisRoom){
+            console.log('reconnected to a game');
+            if (reconnectTimers[thisRoom]){
+                console.log('clearing timeout?');
+                clearTimeout(reconnectTimers[thisRoom]);
+                delete reconnectTimers[thisRoom];
+            } else {
+                console.log('NO TIMEOUT??');
+            }
+            socket.to(thisRoom).emit('playerReconnected');
+        }
+    }
 
     socket.on('disconnecting', (reason) => {
         console.log(socket.id + ' has left for reason: ' + reason);
         // Remove from available rooms if in there
-        availableRooms = availableRooms.filter(function(room){
+        /*availableRooms = availableRooms.filter(function(room){
             return room.socketid !== socket.id;
-        });
+        });*/
         const [,thisRoom] = socket.rooms;
         if (thisRoom){
-            if (!socket.data.spectator && reason == 'client namespace disconnect'){
-                io.to(thisRoom).emit('playerLeft');
-                spectationRooms = spectationRooms.filter(function(room){
-                    return room.code !== thisRoom;
-                });
-                delete draftTimers[thisRoom];
-                delete winTimers[thisRoom];
+            delete availableRooms[thisRoom];
+            delete listRooms[thisRoom];
+            if (!socket.data.spectator){
+                socket.to(thisRoom).emit('playerLeft');
+                reconnectTimers[thisRoom] = setTimeout(function(){
+                    console.log(socket.id + ' disconnected for 30 seconds, cleaning up...');
+                    delete spectationRooms[thisRoom];
+                    delete listSpectate[thisRoom];
+                    delete draftTimers[thisRoom];
+                    delete winTimers[thisRoom];
+                    delete reconnectTimers[thisRoom];
+                }, 30000);
             } else {
-                let leftRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+                let leftRoom = spectationRooms[thisRoom];
                 if (leftRoom){
                     // remove this socket name from spectators list
                     leftRoom.spectators = leftRoom.spectators.filter(function(spectator){
@@ -62,49 +84,36 @@ io.on('connection', (socket) => {
     });
 
     socket.on('listRooms', () => {
-        let listRooms = [];
-        for (const room of availableRooms){
-            listRooms.push({
-                host: socket.data.name,
-                code: room.code,
-                name: room.name,
-                password: room.password ? true : false,
-                winRate: room.winRate,
-                no_rng: room.no_rng,
-                random_teams: room.random_teams,
-                timer_setting: room.timer_setting
-            });
-        }
         socket.emit('availableRooms', listRooms);
     });
 
     socket.on('listSpectate', () => {
-        let listSpectate = [];
-        for (const room of spectationRooms){
-            listSpectate.push({
-                host: socket.data.name,
-                code: room.code,
-                name: room.name,
-                password: room.password ? true : false,
-                winRate: room.winRate,
-                no_rng: room.no_rng,
-                random_teams: room.random_teams,
-                timer_setting: room.timer_setting
-            });
-        }
-        socket.emit('spectationRooms', spectationRooms);
+        socket.emit('spectationRooms', listSpectate);
     });
 
     socket.on('createRoom', (roomName, password, winRate, no_rng, random_teams, timer_setting) => {
         let agent = socket.handshake.headers['user-agent'],
             ip = socket.handshake.address
-        let existingRoomForUser = availableRooms.find(function(room){
+        /*let existingRoomForUser = availableRooms.find(function(room){
             return room.agent == agent && room.ip == ip;
         });
         if (!existingRoomForUser){
             spectationRooms.find(function(room){
                 return room.agent == agent && room.ip == ip;
             });
+        }*/
+        let existingRoomForUser = false;
+        for (const room in availableRooms){
+            if (availableRooms[room].agent == agent && availableRooms[room].ip == ip){
+                existingRoomForUser = true;
+            }
+        }
+        if (!existingRoomForUser){
+            for (const room in spectationRooms){
+                if (spectationRooms[room].agent == agent && spectationRooms[room].ip == ip){
+                    existingRoomForUser = true;
+                }
+            }
         }
         if (existingRoomForUser){
             socket.emit('duplicateRoom');
@@ -117,7 +126,27 @@ io.on('connection', (socket) => {
             timerAdd = timerSplit[1] ? parseInt(timerSplit[1]) : 0;
         console.log(socket.data.name + ' created ' + roomName + ' on IP ' + socket.handshake.address);
         console.log(socket.handshake.headers['user-agent']);
-        availableRooms.push({
+        let newRoom = {
+            socketid: socket.id,
+            host: socket.data.name,
+            code: roomCode,
+            name: roomName,
+            password: password ? true : false,
+            spectators: [],
+            winRate: winRate,
+            no_rng: no_rng,
+            random_teams: random_teams,
+            timer_setting: timer_setting,
+            timer_millis: timerMillis,
+            timer_add: timerAdd * 1000
+        };
+        listRooms[roomCode] = newRoom;
+        let actualRoom = {...newRoom};
+        actualRoom.password = password;
+        actualRoom.ip = ip;
+        actualRoom.agent = agent;
+        availableRooms[roomCode] = actualRoom;
+        /*availableRooms.push({
             socketid: socket.id,
             host: socket.data.name,
             code: roomCode,
@@ -132,26 +161,34 @@ io.on('connection', (socket) => {
             timer_add: timerAdd * 1000,
             ip: ip,
             agent: agent
-        });
+        });*/
         console.log(timerMillis);
         console.log(timerAdd);
     });
 
     socket.on('joinRoom', (roomCode, password) => {
-        let wantedRoom = availableRooms.find(function(room){return room.code == roomCode;});
+        //let wantedRoom = availableRooms.find(function(room){return room.code == roomCode;});
+        let wantedRoom = availableRooms[roomCode];
         if (!wantedRoom){
             console.log('Cant find ' + roomCode);
             socket.emit('noRoom');
         } else {
             if (!wantedRoom.password || password == wantedRoom.password){
+                listSpectate[roomCode] = listRooms[roomCode];
+                listSpectate[roomCode].secondary = socket.data.name;
+                delete listRooms[roomCode];
+
                 wantedRoom.secondary = socket.data.name;
                 wantedRoom.hostRemaining = wantedRoom.timer_millis;
                 wantedRoom.secondaryRemaining = wantedRoom.timer_millis;
-                spectationRooms.push(wantedRoom);
+                spectationRooms[roomCode] = wantedRoom;
+                // change pointer
+                //wantedRoom = spectationRooms[roomCode];
                 console.log('join success');
-                availableRooms = availableRooms.filter(function(room){
+                delete availableRooms[roomCode];
+                /*availableRooms = availableRooms.filter(function(room){
                     return room.socketid !== wantedRoom.socketid;
-                });
+                });*/
                 socket.join(wantedRoom.code);
                 wantedRoom.hostSide = Math.random() < 0.5 ? 'LIGHT' : 'DARK';
                 wantedRoom.enemySide = wantedRoom.hostSide == 'DARK' ? 'LIGHT' : 'DARK';
@@ -173,7 +210,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('spectate', (roomCode, password) => {
-        let wantedRoom = spectationRooms.find(function(room){return room.code == roomCode;});
+        let wantedRoom = spectationRooms[roomCode];
         if (!wantedRoom){
             socket.emit('noRoom');
         } else {
@@ -190,7 +227,12 @@ io.on('connection', (socket) => {
 
     socket.on('ready', (types) => {
         const [,thisRoom] = socket.rooms;
-        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        let theRoom = spectationRooms[thisRoom];
+        let typeCheck = new Set(types);
+        if (typeCheck.size < 16){
+            socket.emit('badTypes');
+            return;
+        }
         socket.to(thisRoom).emit('enemyReady', types);
         if (theRoom.socketid == socket.id){
             theRoom.hostReady = true;
@@ -204,11 +246,12 @@ io.on('connection', (socket) => {
             } else {
                 theRoom.secondaryStart = Date.now();
             }
+            hitClock(socket, theRoom, true);
         }
     });
     socket.on('unready', () => {
         const [,thisRoom] = socket.rooms;
-        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        let theRoom = spectationRooms[thisRoom];
         socket.to(thisRoom).emit('enemyUnready');
         if (theRoom.socketid == socket.id){
             theRoom.hostReady = false;
@@ -218,13 +261,13 @@ io.on('connection', (socket) => {
     });
     socket.on('normalMove', (pieceIndex, moveIndex, hitType) => {
         const [,thisRoom] = socket.rooms;
-        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        let theRoom = spectationRooms[thisRoom];
         socket.to(thisRoom).emit('normalMove', pieceIndex, moveIndex, hitType);
         hitClock(socket, theRoom);
     });
     socket.on('attemptTake', (pieceIndex, moveIndex) => {
         const [,thisRoom] = socket.rooms;
-        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        let theRoom = spectationRooms[thisRoom];
         let hitType = 'normal';
         if (!theRoom.no_rng){
             if (~~(Math.random() * 16) == 0){
@@ -240,8 +283,16 @@ io.on('connection', (socket) => {
     });
     socket.on('promotion', (pieceIndex, newType) => {
         const [,thisRoom] = socket.rooms;
+        let theRoom = spectationRooms[thisRoom];
+        let theSide = theRoom.socketid == socket.id ? theRoom.hostSide : theRoom.enemySide;
+        if (theSide == 'LIGHT' && pieceIndex < 56){
+            io.to(thisRoom).emit('timerExpired', theSide);
+            return;
+        } else if (theSide == 'DARK' && pieceIndex > 7){
+            io.to(thisRoom).emit('timerExpired', theSide);
+            return;
+        }
         socket.to(thisRoom).emit('promotion', pieceIndex, newType);
-        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
         hitClock(socket, theRoom);
     });
     socket.on('syncSpectators', (boardArray, chessSettings, currentPlayer) => {
@@ -251,7 +302,7 @@ io.on('connection', (socket) => {
     socket.on('rematch', () => {
         const [,thisRoom] = socket.rooms;
         socket.to(thisRoom).emit('rematchWanted');
-        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        let theRoom = spectationRooms[thisRoom];
         if (!theRoom){
             return;
         }
@@ -287,35 +338,43 @@ io.on('connection', (socket) => {
     socket.on('nextPlayer', () => {
         const [,thisRoom] = socket.rooms;
         socket.to(thisRoom).emit('nextPlayer');
-        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        let theRoom = spectationRooms[thisRoom];
         hitClock(socket, theRoom);
     });
     socket.on('castle', (rookIndex, nextIndex, kingIndex, newIndex) => {
         const [,thisRoom] = socket.rooms;
         io.to(thisRoom).emit('castle', rookIndex, nextIndex, kingIndex, newIndex);
-        let theRoom = spectationRooms.find(function(room){return room.code == thisRoom;});
+        let theRoom = spectationRooms[thisRoom];
         hitClock(socket, theRoom);
+    });
+    socket.on('forfeit', () => {
+        const [,thisRoom] = socket.rooms;
+        socket.to(thisRoom).emit('forfeit');
     });
 });
 
-function hitClock(socket, room){
+function hitClock(socket, room, noAdd){
     let timerRemaining, timerSide;
     if (room.socketid == socket.id){
         room.hostRemaining = room.hostRemaining - (Date.now() - room.hostStart);
-        room.hostRemaining += room.timer_add;
+        if (!noAdd){
+            room.hostRemaining += room.timer_add;
+        }
         room.secondaryStart = Date.now();
-        timerRemaining = room.hostRemaining;
+        timerRemaining = room.secondaryRemaining;
         timerSide = room.enemySide;
     } else {
         room.secondaryRemaining = room.secondaryRemaining - (Date.now() - room.secondaryStart);
-        room.secondaryRemaining += room.timer_add;
+        if (!noAdd){
+            room.secondaryRemaining += room.timer_add;
+        }
         room.hostStart = Date.now();
-        timerRemaining = room.secondaryRemaining;
+        timerRemaining = room.hostRemaining;
         timerSide = room.hostSide;
     }
     io.to(room.code).emit('timerUpdate', room.hostRemaining, room.secondaryRemaining);
     if (winTimers[room.code]){
-        clearInterval(winTimers[room.code]);
+        clearTimeout(winTimers[room.code]);
     }
     winTimers[room.code] = setTimeout(function(){
         io.to(room.code).emit('timerExpired', timerSide);

@@ -89,10 +89,17 @@ const pokemon_types = [
 
     v2
     audio play loaded in elements rather than creating new object
-    win timer on server
+    reconnection completed
+    win timer on server - DONE!
     queen promote kill - done
-    team builder
+    team builder - half done
     back to menu
+    max connections per ip - done
+    maximum type of pokemon - next update?
+    concede button
+    draws if both kings die
+    JS cleanup
+    basic cheater detection (one type, bad promotion) - done
 */
 
 let socket;
@@ -101,6 +108,7 @@ let protected_names = ['el xando', 'ei xando', 'little z', 'littie z', 'hopcat',
 let bad_words = ['nigger', 'nlgger', 'chink', 'coon', 'n1gger', 'n1gg3r', 'nigg3r', 'golliwog', 'niglet', 'c00n', 'retard', '<script', '/script>'];
 
 let imagesLoaded;
+let availableTable, spectateTable;
 
 let gifList = ['bishop missed', 'bishop none', 'king missed', 'king none', 'knight missed', 'knight none', 'pawn missed', 'pawn none',
     'queen missed', 'queen none', 'rook missed', 'rook none', 'critical', 'not-very', 'super'];
@@ -161,6 +169,7 @@ function preloadMessages(){
         switch (audioToLoad){
             case 'check':
                 audios[audioToLoad].volume = 0.2;
+                audios[audioToLoad].loop = true;
                 break;
             case 'promotion':
                 audios[audioToLoad].volume = 0.5;
@@ -302,11 +311,6 @@ function loadImages(){
         $('#you_disconnected').removeClass('hidden');
     });
 
-    window.onbeforeunload = function(){
-        console.log('unloading');
-        socket.disconnect();
-    };
-
     socket.emit('listRooms');
     socket.emit('listSpectate');
 
@@ -319,20 +323,26 @@ function loadImages(){
     }
 
     socket.on('availableRooms', (availableRooms) => {
-        //$('#available_table').DataTable().destroy();
-        $('#available_count').html('(' + availableRooms.length + ')');
+        if (availableTable){
+            availableTable.destroy();
+        }
+        console.log(availableRooms);
+        $('#available_count').html('(' + Object.keys(availableRooms).length + ')');
         $('#room_list').html('');
-        for (const room of availableRooms){
+        for (let room in availableRooms){
+            room = availableRooms[room];
             let no_rng = room.no_rng ? 'fa-toggle-on' : 'fa-toggle-off',
                 random_teams = room.random_teams ? 'fa-toggle-on' : 'fa-toggle-off';
             $('#room_list').append('<tr class="pointer" data-pass="'+(room.password ? 'T' : 'F')+'" data-code="'+room.code+'"><td>'+room.host+
                 '</td><td>'+room.name+'</td><td>'+room.winRate+'</td><td data-order="' + (room.password ? '1' : '0') + '">'+
                 '<i class="fa fa-lock'+(room.password ? '' : '-open')+'"></i></td><td><i class="fa '+no_rng+'"></i></td><td><i class="fa '+random_teams+'"></i></td><td>'+room.timer_setting+'</tr>');
         }
-        if (!availableRooms.length){
+        if (!Object.keys(availableRooms).length){
             $('#room_list').append('<tr><td colspan="100%">No rooms currently available.</td></tr>');
+        } else {
+            availableTable = $('#available_table').DataTable({dom: 'ft', paging: false, columnDefs: [{className: 'dt-head-center', targets: '_all'}]});
         }
-        //$('#available_table').DataTable({dom: 'ft', paging: false, columnDefs: [{className: 'dt-head-center', targets: '_all'}]});
+
         setTimeout(function(){
             $('.reload-rooms').removeClass('fa-spin');
         }, 1000);
@@ -361,18 +371,22 @@ function loadImages(){
     });
 
     socket.on('spectationRooms', (spectationRooms) => {
-        //$('#spectate_table').DataTable().destroy();
-        $('#spectate_count').html('(' + spectationRooms.length + ')');
+        if (spectateTable){
+            spectateTable.destroy();
+        }
+        $('#spectate_count').html('(' + Object.keys(spectationRooms).length + ')');
         $('#spectate_list').html('');
-        for (const room of spectationRooms){
+        for (let room in spectationRooms){
+            room = spectationRooms[room];
             let hasPassword = room.password ? 'T' : 'F';
             $('#spectate_list').append('<tr class="pointer" data-pass="'+hasPassword+'" data-code="'+room.code+'"><td>'+room.host+'</td><td>'+room.secondary+
                 '</td><td>'+room.name+'</td><td data-order="' + (hasPassword == 'T' ? '1' : '0') + '"><i class="fa fa-lock'+(hasPassword == 'T' ? '' : '-open') +'"></i></td></tr>');
         }
-        if (!spectationRooms.length){
+        if (!Object.keys(spectationRooms).length){
             $('#spectate_list').append('<tr><td colspan="100%">No games in progress.</td></tr>');
+        } else {
+            spectateTable = $('#spectate_table').DataTable({dom: 'ft', paging: false, columnDefs: [{className: 'dt-head-center', targets: '_all'}]});
         }
-        //$('#spectate_table').DataTable({dom: 'ft', paging: false, columnDefs: [{className: 'dt-head-center', targets: '_all'}]});
         setTimeout(function(){
             $('.reload-spectate').removeClass('fa-spin');
         }, 1000);
@@ -729,9 +743,13 @@ function loadImages(){
     });
 
     socket.on('playerLeft', () => {
-        $('.board_message').addClass('hidden');
+        //$('.board_message').addClass('hidden');
         $('#opponent_disconnected').removeClass('hidden');
         $('#game').css('pointer-events', '');
+    });
+
+    socket.on('playerReconnected', () => {
+        $('#opponent_disconnected').addClass('hidden');
     });
     
     $('.toggle').click(function(){
@@ -782,20 +800,100 @@ function loadImages(){
         }
         gameOver(Side[winnerSide]);
     });
+
+    socket.on('duplicateRoom', () => {
+        alert('You are already hosting a room. Close that one before opening a new one!');
+        window.close();
+        location.reload();
+    });
+
+    $('#team_builder').click(function(){
+        $('#setup_div').addClass('hidden');
+        $('#game').removeClass('hidden');
+        if (!boardArray[0]){
+            setupGame();
+        }
+        chessSettings.side = Side.LIGHT;
+        drawAll();
+        $('#piece_setup_div').removeClass('hidden');
+        $('#chess_clock').addClass('hidden');
+        $('.enemy_element').addClass('hidden');
+        $('#switch_sides').removeClass('hidden');
+        $('.team_builder').removeClass('hidden');
+    });
+
+    $('#switch_sides').click(function(){
+        let currentTeam;
+        let pieceCheck = function(boardSlot){
+            if (boardSlot.piece.pokemon_type){
+                let type = boardSlot.piece.pokemon_type.type;
+                delete boardSlot.piece.pokemon_type;
+                return type;
+            } else {
+                return '';
+            }
+        };
+        if (chessSettings.side == Side.LIGHT){
+            chessSettings.side = Side.DARK;
+            currentTeam = boardArray.slice(0,16).map(pieceCheck);
+        } else {
+            chessSettings.side = Side.LIGHT;
+            currentTeam = boardArray.slice(56,64).map(pieceCheck);
+            currentTeam = currentTeam.concat(boardArray.slice(48,56).map(pieceCheck));
+        }
+        currentPiece = null;
+        $('#piece_choice').html('');
+        $.each(currentTeam, function(index, item){
+            if (item){
+                let pieceIndex = index;
+                if (chessSettings.side === Side.DARK){
+                    if (index < 8){
+                        pieceIndex = 56 + index;
+                    } else {
+                        pieceIndex = 48 + index - 8;
+                    }
+                }
+                boardArray[pieceIndex].piece.pokemon_type = pokemon_types.find(function(type){return type.type == item;});
+            }
+        });
+        drawAll();
+    });
+
+    $('.back_menu').click(function(){
+        alert('back!');
+    });
+
+    socket.on('badTypes', () => {
+        alert('Fix your team, cheater...');
+        $('#player_ready').click();
+    });
+
+    $('#forfeit_game').click(function(){
+        if (confirm('Are you sure you want to forfeit?')){
+            let otherSide = this.side == Side.LIGHT ? Side.DARK : Side.LIGHT;
+            gameOver(otherSide, true);
+            socket.emit('forfeit');
+        }
+    });
+
+    socket.on('forfeit', () => {
+        gameOver(chessSettings.side, true);
+    });
 }
 
 function playAudio(name, volume){
     console.log('audio: ' + name);
     if (chessSettings.audio){
-        if (name == 'check' && chessSettings.audio.src == 'audio/check.mp3' && !chessSettings.audio.ended){
+        /*if (name == 'check' && chessSettings.audio.src == 'audio/check.mp3' && !chessSettings.audio.ended){
             return;
-        }
-        chessSettings.audio.pause();
+        }*/
+        //chessSettings.audio.pause();
     }
-    chessSettings.audio = new Audio('audio/'+name+'.mp3');
+    /*chessSettings.audio = new Audio('audio/'+name+'.mp3');
     if (volume){
         chessSettings.audio.volume = volume;
-    }
+    }*/
+    chessSettings.audio = audios[name];
     chessSettings.audio.play();
 }
 
@@ -881,8 +979,8 @@ function startGame(){
     if (chessSettings.clock){
         clearInterval(chessSettings.clock);
     }
-    $('#enemy_clock, #player_clock').html('10:00.0');
-    hitClock();
+    //$('#enemy_clock, #player_clock').html('10:00.0');
+    //hitClock();
     if (chessSettings.host && !chessSettings.spectator){
         socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer);
     }
@@ -933,7 +1031,7 @@ function hitClock(noSet){
     }, 100);
 }
 
-function gameOver(winnerSide){
+function gameOver(winnerSide, fromForfeit){
     let winnerName, incrementString;
     if (chessSettings.side == winnerSide){
         winnerName = chessSettings.playerName;
@@ -949,7 +1047,7 @@ function gameOver(winnerSide){
     } else {
         localStorage.setItem(incrementString, 1);
     }
-    $('#winner_name').html(winnerName + ' wins!');
+    $('#winner_name').html(winnerName + ' wins' + (fromForfeit ? ' by forfeit' : '') + '!');
     $('#rematch_wanted').html('');
     $('#win_message').removeClass('hidden');
     chessSettings.gameOver = true;
@@ -1697,7 +1795,7 @@ function setupGame() {
 }
 
 function checkPieceSelection(){
-    if (chosenTypes.length == 16){
+    if (chosenTypes.length == 16 && $('#switch_sides').hasClass('hidden')){
         $('#save_team, #player_ready').removeClass('hidden');
     } else {
         $('#save_team, #player_ready').addClass('hidden');
