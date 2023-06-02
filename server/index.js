@@ -25,11 +25,25 @@ let availableRooms = {},
     listSpectate = {},
     draftTimers = {},
     winTimers = {},
-    reconnectTimers = {};
+    reconnectTimers = {},
+    connectedIPs = {};
 
 io.on('connection', (socket) => {
     console.log('New player: ' + socket.id);
     console.log(socket.recovered);
+    if (!socket.handshake.query.beta){
+        console.log('Disconnecting ' + socket.handshake.address + ' for not having beta query!');
+        socket.disconnect(true);
+    }
+    let sameIP = [...io.sockets.sockets].filter(function([id, thisSocket]){
+        return thisSocket.handshake.address == socket.handshake.address;
+    });
+    console.log(sameIP.length);
+    if (sameIP.length > 10){
+        console.log('Disconnected ' + socket.handshake.address + ' for having more than 10 connections');
+        socket.emit('tooManyConnections');
+        socket.disconnect(true);
+    }
     if (socket.recovered){
         const [,thisRoom] = socket.rooms;
         if (thisRoom){
@@ -58,13 +72,13 @@ io.on('connection', (socket) => {
             if (!socket.data.spectator){
                 socket.to(thisRoom).emit('playerLeft');
                 reconnectTimers[thisRoom] = setTimeout(function(){
-                    console.log(socket.id + ' disconnected for 30 seconds, cleaning up...');
+                    console.log(socket.id + ' disconnected for 5 seconds, cleaning up...');
                     delete spectationRooms[thisRoom];
                     delete listSpectate[thisRoom];
                     delete draftTimers[thisRoom];
                     delete winTimers[thisRoom];
                     delete reconnectTimers[thisRoom];
-                }, 30000);
+                }, 5000);
             } else {
                 let leftRoom = spectationRooms[thisRoom];
                 if (leftRoom){
@@ -125,7 +139,6 @@ io.on('connection', (socket) => {
             timerMillis = parseInt(timerSplit[0]) * 60000,
             timerAdd = timerSplit[1] ? parseInt(timerSplit[1]) : 0;
         console.log(socket.data.name + ' created ' + roomName + ' on IP ' + socket.handshake.address);
-        console.log(socket.handshake.headers['user-agent']);
         let newRoom = {
             socketid: socket.id,
             host: socket.data.name,
@@ -240,13 +253,17 @@ io.on('connection', (socket) => {
             theRoom.secondaryReady = true;
         }
         if (theRoom.hostReady && theRoom.secondaryReady){
+            if (draftTimers[thisRoom]){
+                clearTimeout(draftTimers[thisRoom]);
+                delete draftTimers[thisRoom];
+            }
             io.to(thisRoom).emit('startGame');
-            if (theRoom.hostSide == 'LIGHT'){
+            /*if (theRoom.hostSide == 'LIGHT'){
                 theRoom.hostStart = Date.now();
             } else {
                 theRoom.secondaryStart = Date.now();
-            }
-            hitClock(socket, theRoom, true);
+            }*/
+            //hitClock(socket, theRoom, true);
         }
     });
     socket.on('unready', () => {
@@ -260,12 +277,14 @@ io.on('connection', (socket) => {
         }
     });
     socket.on('normalMove', (pieceIndex, moveIndex, hitType) => {
+        console.log('normalMove');
         const [,thisRoom] = socket.rooms;
-        let theRoom = spectationRooms[thisRoom];
+        //let theRoom = spectationRooms[thisRoom];
         socket.to(thisRoom).emit('normalMove', pieceIndex, moveIndex, hitType);
-        hitClock(socket, theRoom);
+        //hitClock(socket, theRoom);
     });
     socket.on('attemptTake', (pieceIndex, moveIndex) => {
+        console.log('attemptTake');
         const [,thisRoom] = socket.rooms;
         let theRoom = spectationRooms[thisRoom];
         let hitType = 'normal';
@@ -278,7 +297,7 @@ io.on('connection', (socket) => {
         }
 
         io.to(thisRoom).emit('takeResult', pieceIndex, moveIndex, hitType);
-        hitClock(socket, theRoom);
+        //hitClock(socket, theRoom);
         //socket.emit('takeResult', pieceIndex, moveIndex, hitType);
     });
     socket.on('promotion', (pieceIndex, newType) => {
@@ -293,7 +312,7 @@ io.on('connection', (socket) => {
             return;
         }
         socket.to(thisRoom).emit('promotion', pieceIndex, newType);
-        hitClock(socket, theRoom);
+        //hitClock(socket, theRoom);
     });
     socket.on('syncSpectators', (boardArray, chessSettings, currentPlayer) => {
         const [,thisRoom] = socket.rooms;
@@ -318,6 +337,10 @@ io.on('connection', (socket) => {
             theRoom.secondaryRematch = false;
             theRoom.hostSide = Math.random() < 0.5 ? 'LIGHT' : 'DARK';
             theRoom.enemySide = theRoom.hostSide == 'DARK' ? 'LIGHT' : 'DARK';
+            theRoom.hostStart = undefined;
+            theRoom.secondaryStart = undefined;
+            theRoom.hostRemaining = theRoom.timer_millis;
+            theRoom.secondaryRemaining = theRoom.timer_millis;
             // if host send hostSide
             if (socketIsHost){
                 socket.emit('rematchStart', theRoom.hostSide);
@@ -339,33 +362,46 @@ io.on('connection', (socket) => {
         const [,thisRoom] = socket.rooms;
         socket.to(thisRoom).emit('nextPlayer');
         let theRoom = spectationRooms[thisRoom];
-        hitClock(socket, theRoom);
+        //hitClock(socket, theRoom);
     });
     socket.on('castle', (rookIndex, nextIndex, kingIndex, newIndex) => {
         const [,thisRoom] = socket.rooms;
         io.to(thisRoom).emit('castle', rookIndex, nextIndex, kingIndex, newIndex);
         let theRoom = spectationRooms[thisRoom];
-        hitClock(socket, theRoom);
+        //hitClock(socket, theRoom);
     });
     socket.on('forfeit', () => {
         const [,thisRoom] = socket.rooms;
         socket.to(thisRoom).emit('forfeit');
     });
+    socket.on('stats', () => {
+        console.log('Available Rooms: ' + Object.keys(availableRooms).length);
+        console.log('Spectation Rooms: ' + Object.keys(spectationRooms).length);
+        console.log('Draft Timers: ' + Object.keys(draftTimers).length);
+        console.log('Win Timers: ' + Object.keys(winTimers).length);
+        console.log('Reconnect Timers: ' + Object.keys(reconnectTimers).length);
+    });
+    socket.on('hitClock', () => {
+        const [,thisRoom] = socket.rooms;
+        let theRoom = spectationRooms[thisRoom];
+        hitClock(socket, theRoom);
+    });
 });
 
-function hitClock(socket, room, noAdd){
+function hitClock(socket, room){
+    console.log('clock time!');
     let timerRemaining, timerSide;
     if (room.socketid == socket.id){
-        room.hostRemaining = room.hostRemaining - (Date.now() - room.hostStart);
-        if (!noAdd){
+        if (room.hostStart){
+            room.hostRemaining = room.hostRemaining - (Date.now() - room.hostStart);
             room.hostRemaining += room.timer_add;
         }
         room.secondaryStart = Date.now();
         timerRemaining = room.secondaryRemaining;
         timerSide = room.enemySide;
     } else {
-        room.secondaryRemaining = room.secondaryRemaining - (Date.now() - room.secondaryStart);
-        if (!noAdd){
+        if (room.secondaryStart){
+            room.secondaryRemaining = room.secondaryRemaining - (Date.now() - room.secondaryStart);
             room.secondaryRemaining += room.timer_add;
         }
         room.hostStart = Date.now();

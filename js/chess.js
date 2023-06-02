@@ -88,7 +88,7 @@ const pokemon_types = [
 
 
     v2
-    audio play loaded in elements rather than creating new object
+    audio play loaded in elements rather than creating new object - done
     reconnection completed
     win timer on server - DONE!
     queen promote kill - done
@@ -96,7 +96,7 @@ const pokemon_types = [
     back to menu
     max connections per ip - done
     maximum type of pokemon - next update?
-    concede button
+    forfeit button - done?
     draws if both kings die
     JS cleanup
     basic cheater detection (one type, bad promotion) - done
@@ -294,7 +294,10 @@ function loadImages(){
             origin: 'https://elxando.co.uk',
             methods: ['GET', 'POST']
         },*/
-        timeout: 5000
+        timeout: 5000,
+        query: {
+            beta: true
+        }
     });
 
     socket.on('connect', () => {
@@ -426,8 +429,9 @@ function loadImages(){
         chessSettings.enemyName = playerName;
         $('#enemy_name').html(playerName);
         if (random_teams){
-            $('#randomise_all').click();
-            $('#player_ready').click();
+            chessSettings.random_teams = true;
+            chessSettings.draftOver = true;
+            $('#randomise_missing').click();
         } else {
             $('#piece_setup_div').removeClass('hidden');
             startDraftTimer();    
@@ -505,8 +509,9 @@ function loadImages(){
         }
         if (chessSettings.draftOver){
             $('#player_ready').click();
+        } else {
+            checkPieceSelection();
         }
-        checkPieceSelection();
     });
 
     socket.on('draftTimeExpired', () => {
@@ -526,6 +531,7 @@ function loadImages(){
         playAudio('promotion', 0.5);
         socket.emit('promotion', currentPiece.getIndex(), newType);
         if (!chessSettings.critical){
+            socket.emit('hitClock');
             nextPlayer();
         } else {
             currentPiece.clearValidMoves();
@@ -738,6 +744,7 @@ function loadImages(){
         currentPiece.clearValidMoves();
         chessSettings.lockPiece = false;
         playAudio('plink',0.3);
+        socket.emit('hitClock');
         nextPlayer();
         socket.emit('nextPlayer');
     });
@@ -798,7 +805,7 @@ function loadImages(){
         } else {
             //$('#enemy_clock').html('00:00.0');
         }
-        gameOver(Side[winnerSide]);
+        gameOver(Side[winnerSide], 'by time');
     });
 
     socket.on('duplicateRoom', () => {
@@ -860,7 +867,7 @@ function loadImages(){
     });
 
     $('.back_menu').click(function(){
-        alert('back!');
+        alert('Not yet implemented, please reload...');
     });
 
     socket.on('badTypes', () => {
@@ -871,30 +878,28 @@ function loadImages(){
     $('#forfeit_game').click(function(){
         if (confirm('Are you sure you want to forfeit?')){
             let otherSide = this.side == Side.LIGHT ? Side.DARK : Side.LIGHT;
-            gameOver(otherSide, true);
+            gameOver(otherSide, 'by forfeit');
             socket.emit('forfeit');
         }
     });
 
     socket.on('forfeit', () => {
-        gameOver(chessSettings.side, true);
+        gameOver(chessSettings.side, 'by forfeit');
+    });
+
+    socket.on('tooManyConnections', () => {
+        alert('You have too many connections to the game server. Please end some before trying to load the website again.');
+        $('#setup_div').addClass('hidden');
     });
 }
 
 function playAudio(name, volume){
     console.log('audio: ' + name);
-    if (chessSettings.audio){
-        /*if (name == 'check' && chessSettings.audio.src == 'audio/check.mp3' && !chessSettings.audio.ended){
-            return;
-        }*/
-        //chessSettings.audio.pause();
+    if (name != 'check'){
+        audios[name].pause();
+        audios[name].currentTime = 0;
     }
-    /*chessSettings.audio = new Audio('audio/'+name+'.mp3');
-    if (volume){
-        chessSettings.audio.volume = volume;
-    }*/
-    chessSettings.audio = audios[name];
-    chessSettings.audio.play();
+    audios[name].play();
 }
 
 function startDraftTimer(){
@@ -934,12 +939,19 @@ function rematch(){
         previousPiece = undefined;
         chosenTypes = [];
         chessSettings.started = false;
-        $('#player_ready').addClass('unready hidden').removeClass('ready');
-        $('#player_ready').html('Ready <i class="fa fa-thumbs-up"></i>');
-        $('#enemy_ready').addClass('unready').removeClass('ready').html('Unready <i class="fa fa-thumbs-down"></i>');
-        $('#piece_setup_div').removeClass('hidden');
         setupGame();
-        startDraftTimer();
+        if (chessSettings.random_teams){
+            chessSettings.draftOver = true;
+            $('#player_ready').removeClass('ready').addClass('unready');
+            $('#randomise_missing').click();
+        } else {
+            chessSettings.draftOver = false;
+            $('#player_ready').addClass('unready hidden').removeClass('ready');
+            $('#player_ready').html('Ready <i class="fa fa-thumbs-up"></i>');
+            $('#enemy_ready').addClass('unready').removeClass('ready').html('Unready <i class="fa fa-thumbs-down"></i>');
+            $('#piece_setup_div').removeClass('hidden');
+            startDraftTimer();
+        }
         if (chessSettings.host){
             socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer);
         }
@@ -969,16 +981,19 @@ function startGame(){
         draw(pieceIndex);
     });
     chessSettings.started = true;
+    if (chessSettings.side == Side.DARK){
+        socket.emit('hitClock');
+    }
     //if (chessSettings.side === Side.LIGHT){
     //chessSettings.playerStart = Date.now();
     //} else {
     //chessSettings.enemyStart = Date.now();
     //}
-    chessSettings.playerRemaining = 600000;
+    /*chessSettings.playerRemaining = 600000;
     chessSettings.enemyRemaining = 600000;
     if (chessSettings.clock){
         clearInterval(chessSettings.clock);
-    }
+    }*/
     //$('#enemy_clock, #player_clock').html('10:00.0');
     //hitClock();
     if (chessSettings.host && !chessSettings.spectator){
@@ -1031,7 +1046,7 @@ function hitClock(noSet){
     }, 100);
 }
 
-function gameOver(winnerSide, fromForfeit){
+function gameOver(winnerSide, reason){
     let winnerName, incrementString;
     if (chessSettings.side == winnerSide){
         winnerName = chessSettings.playerName;
@@ -1047,15 +1062,13 @@ function gameOver(winnerSide, fromForfeit){
     } else {
         localStorage.setItem(incrementString, 1);
     }
-    $('#winner_name').html(winnerName + ' wins' + (fromForfeit ? ' by forfeit' : '') + '!');
+    $('#winner_name').html(winnerName + ' wins ' + reason + '!');
     $('#rematch_wanted').html('');
     $('#win_message').removeClass('hidden');
     chessSettings.gameOver = true;
     chessSettings.lockPiece = false;
     clearInterval(chessSettings.clock);
-    if (chessSettings.audio.src.includes('check.mp3')){
-        chessSettings.audio.pause();
-    }
+    audios.check.pause();
     $('#skip_move').addClass('hidden');
 }
 
@@ -1114,9 +1127,7 @@ function GamePiece(typeEnum, sideEnum) {
         }
     };
     this.move = function(targetIndex, hitType, keepTurn) {
-        if (chessSettings.audio && chessSettings.audio.src.includes('check.mp3')){
-            chessSettings.audio.pause();
-        }
+        audios.check.pause();
 
         let takenLocation = this.side == chessSettings.side ? '#player_taken' : '#enemy_taken',
             otherLocation = takenLocation == '#player_taken' ? '#enemy_taken' : '#player_taken',
@@ -1173,6 +1184,9 @@ function GamePiece(typeEnum, sideEnum) {
             this.clearValidMoves();
             draw(oldIndex);
             draw(targetIndex);
+            if (chessSettings.side == currentPlayer){
+                socket.emit('hitClock');
+            }
             nextPlayer();
             return;
         }
@@ -1208,7 +1222,7 @@ function GamePiece(typeEnum, sideEnum) {
                 } else if (this.promotion){
                     pokemon_image = 'promote' + this.side.file[0] + '%20' + this.pokemon_type.type + '.png';
                 } else if (this.type == 'king') {
-                    gameOver(otherSide);
+                    gameOver(otherSide, 'by king not very effective death');
                 }
                 $(otherLocation).append('<div style="background-image:url(\'img/'+this.type+'%20'+this.side.file+'.png\')"><img src="img/' + pokemon_image + '" /></div>');
                 boardArray[oldIndex].justLeft = false;
@@ -1251,7 +1265,7 @@ function GamePiece(typeEnum, sideEnum) {
             }
             $(takenLocation).append('<div style="background-image:url(\'img/'+takenType+'%20'+otherSide.file+'.png\')"><img src="img/' + pokemon_image + '" /></div>');
             if (takenType == 'king'){
-                gameOver(currentPlayer);
+                gameOver(currentPlayer, 'by taking the king');
             }
         }
 
@@ -1281,6 +1295,9 @@ function GamePiece(typeEnum, sideEnum) {
             this.showValidMoves();
         }
         if (!critical && !promotion && !keepTurn && !chessSettings.gameOver){
+            if (chessSettings.side == currentPlayer){
+                socket.emit('hitClock');
+            }
             nextPlayer();
         }
 

@@ -26,7 +26,7 @@
 </head>
 <body onload="loadImages()">
 <div class="content">
-  <div class="hidden update_div" data-date="20230515">
+  <div class="hidden update_div2" data-date="20230515">
     15th May 2023 Updates:
     <ul style="list-style-position:inside;">
       <li>Team Builder! Configure and save your teams before joining a game.</li>
@@ -38,6 +38,10 @@
       <li>Move related gifs and audio now preloaded so shouldn't be late the first time.</li>
     </ul>
     <a href="#" class="dismiss_update" data-date="20230515">Click here to dismiss.</a>
+  </div>
+  <div class="hidden update_div" data-date="beta_discord">
+    Beta!<br />
+    Please post any issues to the thread in the #suggestions channel of the discord.
   </div>
   <div style="width:100%">
     <img src="img/Pokemon%20Chess%20Logo.webp" height="300px" style="margin:10px;" />
@@ -74,7 +78,11 @@
             </tr>
             <tr>
             <td>Timer</td>
-                <td><select id="timer_setting"><option value="10">10 mins</option><option value="3|2">3 | 2</option><option value="">None</option></select></td>
+                <td><select id="timer_setting">
+                  <option value="10">10 mins</option>
+                  <option value="3|2">3 | 2</option>
+                  <!--<option value="">None</option>-->
+                </select></td>
             </tr>
         </tbody>
       </table>
@@ -218,5 +226,5 @@
 </div>
 
 </body>
-<script src="js/chess.js?v=2.44"></script>
+<script src="js/chess.js?v=3"></script>
 </html>
