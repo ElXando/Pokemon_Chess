@@ -1,230 +1,292 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-RH0S49Z6L6"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-RH0S49Z6L6"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
 
-    gtag('config', 'G-RH0S49Z6L6');
-  </script>
-  <meta charset="UTF-8" />
-  <title>Pokémon Chess</title>
+        function gtag() {
+            dataLayer.push(arguments);
+        }
 
-  <link rel="shortcut icon" href="favicon.ico">
+        gtag('js', new Date());
 
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
-  <script src="js/socket.io.min.js?v=2"></script>
-  <script src="js/md5.min.js"></script>
-  <link href="css/chess.css?v=2" rel="stylesheet" />
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" rel="stylesheet" />
-  <link href="//cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet" />
-  <script src="//cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+        gtag('config', 'G-RH0S49Z6L6');
+    </script>
+    <meta charset="UTF-8"/>
+    <title>Pokémon Chess</title>
+
+    <link rel="shortcut icon" href="favicon.ico">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+    <script src="js/socket.io.min.js?v=2"></script>
+    <script src="js/md5.min.js"></script>
+    <link href="css/chess.css?v=2.1" rel="stylesheet"/>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" rel="stylesheet"/>
+    <link href="//cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet"/>
+    <script src="//cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 </head>
 <body onload="loadImages()">
 <div class="content">
-  <div class="hidden update_div2" data-date="20230515">
-    15th May 2023 Updates:
-    <ul style="list-style-position:inside;">
-      <li>Team Builder! Configure and save your teams before joining a game.</li>
-      <li>Room options! Disable RNG, enforce random teams and choose from 3 different timer options.</li>
-      <li>Forfeit button! Lost your queen and salty? At least forfeit instead of rage quitting.</li>
-      <li>Timer fixes, now kept track of on the server instead of on each client.</li>
-      <li>It should no longer be possible to create multiple rooms at once.</li>
-      <li>Cheater detection. If you win for seemingly no reason, they may have been trying to cheat...</li>
-      <li>Move related gifs and audio now preloaded so shouldn't be late the first time.</li>
-    </ul>
-    <a href="#" class="dismiss_update" data-date="20230515">Click here to dismiss.</a>
-  </div>
-  <div class="hidden update_div" data-date="beta_discord">
-    Beta!<br />
-    Please post any issues to the thread in the #suggestions channel of the discord.
-  </div>
-  <div style="width:100%">
-    <img src="img/Pokemon%20Chess%20Logo.webp" height="300px" style="margin:10px;" />
-  </div>
-
-  <div id="setup_div" class="">
-      <span id="preloading_images">Preloading images! Please wait...</span>
-    <div id="images_loaded" class="hidden">
-    <input maxlength="30" type="text" id="yourName" placeholder="Your Name (Enter to see rooms)" />
-    
-
-    <div id="has_name" class="hidden">
-        <button id="start_host" class="button-1">Host Game</button>
-      <br />
-        <button id="team_builder" class="button-1">Team Builder</button>
-        
-        <table style="margin:0 auto;" id="room_settings" class="hidden">
-        <tbody>
-          <tr>
-            <td>Room Name</td>
-              <td><input maxlength="30" type="text" id="roomName" placeholder="Room Name" /></td>
-        </tr>
-         <tr>
-            <td>Room Password</td>
-             <td><input type="text" id="roomPassword" placeholder="Password (Optional)" /></td>
-            </tr>
-        <tr>
-            <td>Disable Critical Hits & Misses</td>
-            <td><i id="no_rng" class="no_rng toggle pointer fa-solid fa-toggle-off fa-2x"></i></td>
-            </tr>
-        <tr>
-            <td>Random Teams</td>
-            <td><i id="random_teams" class="toggle pointer fa-solid fa-toggle-off fa-2x"></i></td>
-            </tr>
-            <tr>
-            <td>Timer</td>
-                <td><select id="timer_setting">
-                  <option value="10">10 mins</option>
-                  <option value="3|2">3 | 2</option>
-                  <!--<option value="">None</option>-->
-                </select></td>
-            </tr>
-        </tbody>
-      </table>
-
-      <button id="host_game" class="button-1 hidden">Host Game</button>
-      <br />
-      <h3>Available Rooms <span id="available_count">()</span> <i class="fa fa-rotate reload-rooms pointer"></i></h3>
-
-      <table id="available_table" class="styled-table" style="width:800px;">
-        <thead>
-        <tr>
-            <th>Host</th>
-            <th>Room Name</th>
-            <th>Win Rate</th>
-            <th><i class="fa fa-key"></i></th>
-            <th>No RNG</th>
-            <th>Random Teams</th>
-            <th>Timer</th>
-        </tr>
-        </thead>
-        <tbody id="room_list">
-
-        </tbody>
-      </table>
-      <br />
-      <h3>Spectate <span id="spectate_count">()</span> <i class="fa fa-rotate reload-spectate pointer"></i></h3>
-
-      <table id="spectate_table" class="styled-table" style="width:800px;">
-        <thead>
-        <tr>
-          <th>Player 1</th>
-          <th>Player 2</th>
-          <th>Room Name</th>
-          <th>Type</th>
-        </tr>
-        </thead>
-        <tbody id="spectate_list">
-
-        </tbody>
-      </table>
+    <div class="hidden update_div" data-date="20230515">
+        Beta!<br/>
+        Please post any issues to the #beta channel of the discord.
+        <ul style="list-style-position:inside;">
+            <li>Team Builder! Configure and save your teams before joining a game.</li>
+            <li>Room options! Disable RNG, enforce random teams and choose from 3 different timer options.</li>
+            <li>Forfeit button! Lost your queen and salty? At least forfeit instead of rage quitting.</li>
+            <li>Timer fixes, now kept track of on the server instead of on each client.</li>
+            <li>It should no longer be possible to create multiple rooms at once.</li>
+            <li>Cheater detection. If you win for seemingly no reason, they may have been trying to cheat...</li>
+            <li>Move related gifs and audio now preloaded so shouldn't be late the first time.</li>
+        </ul>
+        <a href="#" class="dismiss_update" data-date="20230515">Click here to dismiss.</a>
     </div>
-        
-      </div>
-
-
-  </div>
-  <div id="game" class="hidden">
-    <h1 class="enemy_element" id="enemy_name">Awaiting Opponent...</h1>
-    <button id="enemy_ready" class="button-1 unready enemy_element" style="pointer-events:none;">Not Ready <i class="fa fa-thumbs-down"></i></button>
-    <button class="back_menu team_builder button-1 hidden">Back to Menu</button>
-
-    <div style="width:100%;height:100%;position:relative;">
-      <div id="mid_board" class="hidden"></div>
-      <div id="promotion_choice" class="hidden board_message">
-        Choose Promotion<br />
-        <img class="pointer" data-type="QUEEN" src="img/queen%20white.png" width="100px" /><img class="pointer" data-type="KNIGHT" src="img/knight%20white.png" width="100px" /><img class="pointer" data-type="BISHOP" src="img/bishop%20white.png" width="100px" /><img class="pointer" data-type="ROOK" src="img/rook%20white.png" width="100px" />
-      </div>
-      <div id="win_message" class="hidden board_message">
-        <h3>Game Over!</h3>
-        <div id="winner_name"></div>
-        <br />
-        <div id="rematch_wanted"></div>
-        <button class="button-1" id="rematch">Rematch?</button>
-      </div>
-      <div id="opponent_disconnected" class="hidden board_message">
-        <b>Opponent disconnected!</b><br /><br />
-        <button onclick="location.reload()" class="button-1">Reload</button>
-      </div>
-      <div id="you_disconnected" class="hidden board_message">
-        <b>You have disconnected for reason: <span id="disconnect_reason"></span></b><br />
-        Attempting to reconnect...<br /><br />
-        <button onclick="location.reload()" class="button-1">Reload</button>
-      </div>
-      <div id="skip_move_hint" class="hidden board_message">
-        <b>There's a skip additional move button below the board if you don't want to do an additional move...</b>
-      </div>
-      <div id="spectators"></div>
-      <div id="enemy_gif" class="hidden"><img src="" /></div>
-      <canvas id="chess_game" width="800" height="800">
-        Canvas enabled chess game.
-      </canvas>
-      <div id="player_gif" class="hidden"><img src="" /></div>
-      <div class="taken_area" id="enemy_taken"></div>
-      <div id="chess_clock">
-        <div class="player_clock" data-remaining="600000" id="enemy_clock">10:00.0</div>
-        <div class="divider"><i class="fa fa-3x fa-clock"></i></div>
-        <div class="player_clock" data-remaining="600000" id="player_clock">10:00.0</div>
-      </div>
-      <div class="taken_area" id="player_taken"></div>
+    <div style="width:100%">
+        <img src="img/Pokemon%20Chess%20Logo.webp" height="300px" style="margin:10px;"/>
     </div>
 
-    <button id="switch_sides" class="button-1 hidden">Switch Sides</button>
-    <button id="player_ready" class="button-1 unready hidden">Ready <i class="fa fa-thumbs-up"></i></button>
-    <button id="skip_move" class="button-1 hidden">Skip Additional Move</button>
-    <h1 id="player_name"></h1>
-    <button id="forfeit_game" class="button-1 hidden">Forfeit</button>
-    <div class="hidden" id="types"></div>
-    <div id="piece_setup_div" class="hidden">
-      <div id="piece_choice"></div>
-      <table class="styled-table" id="saved_teams_table" style="width:800px;">
-        <thead>
-        <tr>
-          <th>Team Name</th>
-          <th>Delete</th>
-        </tr>
-        </thead>
-        <tbody>
+    <div id="setup_div" class="">
+        <span id="preloading_images">Preloading images! <b id="loaded_count">0/197</b></span>
+        <div id="images_loaded" class="hidden">
+            <input maxlength="30" type="text" id="yourName" placeholder="Your Name (Enter to see rooms)"/>
 
-        </tbody>
-      </table>
-      <button class="button-1 inline-button" id="randomise_all">Randomise All</button>
-      <button class="button-1 inline-button" id="randomise_missing">Randomise Missing</button>
-      <button class="button-1 inline-button hidden" id="save_team">Save Team</button>
-      <div id="taken_piece"></div>
+
+            <div id="has_name" class="hidden">
+                <button id="start_host" class="button-1">Host Game</button>
+                <br/>
+                <button id="team_builder" class="button-1">Team Builder</button>
+
+                <table style="margin:0 auto;" id="room_settings" class="hidden">
+                    <tbody>
+                    <tr>
+                        <td>Room Name</td>
+                        <td><input maxlength="30" type="text" id="roomName" placeholder="Room Name"/></td>
+                    </tr>
+                    <tr>
+                        <td>Room Password</td>
+                        <td><input type="text" id="roomPassword" placeholder="Password (Optional)"/></td>
+                    </tr>
+                    <tr>
+                        <td>Disable Critical Hits & Misses</td>
+                        <td><i id="no_rng" class="no_rng toggle pointer fa-solid fa-toggle-off fa-2x"></i></td>
+                    </tr>
+                    <tr>
+                        <td>Random Teams</td>
+                        <td><i id="random_teams" class="toggle pointer fa-solid fa-toggle-off fa-2x"></i></td>
+                    </tr>
+                    <tr>
+                        <td>Timer</td>
+                        <td><select id="timer_setting">
+                            <option value="10">10 mins</option>
+                            <option value="3|2">3 | 2</option>
+                            <option value="F">None</option>
+                        </select></td>
+                    </tr>
+                    </tbody>
+                </table>
+
+                <button id="host_game" class="button-1 hidden">Host Game</button>
+                <br/>
+                <h3>Available Rooms <span id="available_count">()</span> <i
+                        class="fa fa-rotate reload-rooms pointer"></i></h3>
+
+                <table id="available_table" class="styled-table" style="width:800px;">
+                    <thead>
+                    <tr>
+                        <th>Host</th>
+                        <th>Room Name</th>
+                        <th>Win Rate</th>
+                        <th><i class="fa fa-key"></i></th>
+                        <th>No RNG</th>
+                        <th>Random Teams</th>
+                        <th>Timer</th>
+                    </tr>
+                    </thead>
+                    <tbody id="room_list">
+
+                    </tbody>
+                </table>
+                <br/>
+                <h3>Spectate <span id="spectate_count">()</span> <i class="fa fa-rotate reload-spectate pointer"></i>
+                </h3>
+
+                <table id="spectate_table" class="styled-table" style="width:800px;">
+                    <thead>
+                    <tr>
+                        <th>Player 1</th>
+                        <th>Player 2</th>
+                        <th>Room Name</th>
+                        <th>Type</th>
+                    </tr>
+                    </thead>
+                    <tbody id="spectate_list">
+
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+
     </div>
+    <div id="game" class="hidden">
+        <h1 class="enemy_element" id="enemy_name">Awaiting Opponent...</h1>
+        <button id="enemy_ready" class="button-1 unready enemy_element" style="pointer-events:none;">Not Ready <i
+                class="fa fa-thumbs-down"></i></button>
+        <button class="back_menu team_builder button-1 hidden">Back to Menu</button>
 
-    <!--<div style="display:flex">
-      <div class="die_face" id="die_1">
-        <span class="pip"></span>
-      </div>
+        <div style="width:100%;height:100%;position:relative;">
+            <div id="mid_board" class="hidden"></div>
+            <div id="promotion_choice" class="hidden board_message">
+                Choose Promotion<br/>
+                <img class="pointer" data-type="QUEEN" src="img/queen%20white.png" width="100px"/>
+                <img class="pointer" data-type="KNIGHT" src="img/knight%20white.png" width="100px"/>
+                <img class="pointer" data-type="BISHOP" src="img/bishop%20white.png" width="100px"/>
+                <img class="pointer" data-type="ROOK" src="img/rook%20white.png" width="100px"/>
+            </div>
+            <div id="win_message" class="hidden board_message">
+                <h3>Game Over!</h3>
+                <div id="winner_name"></div>
+                <br/>
+                <div id="rematch_wanted"></div>
+                <button class="button-1" id="rematch">Rematch?</button>
+                <br/>
+                <button class="button-1 back_menu">Back to Menu</button>
+            </div>
+            <div id="opponent_disconnected" class="hidden board_message">
+                <b>Opponent disconnected!</b><br/><br/>
+                <button class="back_menu button-1">Back to Menu</button>
+            </div>
+            <div id="you_disconnected" class="hidden board_message">
+                <b>You have disconnected for reason: <span id="disconnect_reason"></span></b><br/>
+                Attempting to reconnect...<br/><br/>
+                <button class="back_menu button-1">Back to Menu</button>
+            </div>
+            <div id="skip_move_hint" class="hidden board_message">
+                <b>There's a skip additional move button below the board if you don't want to do an additional
+                    move...</b>
+            </div>
+            <div id="spectators"></div>
+            <div id="enemy_gif" class="hidden"><img src=""/></div>
+            <div class="grid_border grid_numbers" style="left:-25px;">
+                <div style="height:25px;"></div>
+                <div class="chess_number">8</div>
+                <div class="chess_number">7</div>
+                <div class="chess_number">6</div>
+                <div class="chess_number">5</div>
+                <div class="chess_number">4</div>
+                <div class="chess_number">3</div>
+                <div class="chess_number">2</div>
+                <div class="chess_number">1</div>
+                <div style="height:25px;"></div>
+            </div>
+            <div class="grid_border grid_letters" style="top:0;left:-25px;">
+                <div style="width:25px;"></div>
+                <div class="chess_letter">A</div>
+                <div class="chess_letter">B</div>
+                <div class="chess_letter">C</div>
+                <div class="chess_letter">D</div>
+                <div class="chess_letter">E</div>
+                <div class="chess_letter">F</div>
+                <div class="chess_letter">G</div>
+                <div class="chess_letter">H</div>
+                <div style="width:25px;"></div>
+            </div>
+            <canvas id="chess_game" width="800" height="800">
+                Canvas enabled chess game.
+            </canvas>
+            <div class="grid_border grid_numbers" style="top:0;right:-25px;">
+                <div style="height:25px;"></div>
+                <div class="chess_number">8</div>
+                <div class="chess_number">7</div>
+                <div class="chess_number">6</div>
+                <div class="chess_number">5</div>
+                <div class="chess_number">4</div>
+                <div class="chess_number">3</div>
+                <div class="chess_number">2</div>
+                <div class="chess_number">1</div>
+                <div style="height:25px;"></div>
+            </div>
+            <div class="grid_border grid_letters" style="bottom:0;left:-25px;">
+                <div style="width:25px;"></div>
+                <div class="chess_letter">A</div>
+                <div class="chess_letter">B</div>
+                <div class="chess_letter">C</div>
+                <div class="chess_letter">D</div>
+                <div class="chess_letter">E</div>
+                <div class="chess_letter">F</div>
+                <div class="chess_letter">G</div>
+                <div class="chess_letter">H</div>
+                <div style="width:25px;"></div>
+            </div>
+            <div id="player_gif" class="hidden"><img src=""/></div>
+            <div class="taken_area" id="enemy_taken"></div>
+            <div id="chess_clock">
+                <div class="player_clock" data-remaining="600000" id="enemy_clock">10:00.0</div>
+                <div class="divider"><i class="fa fa-3x fa-clock"></i></div>
+                <div class="player_clock" data-remaining="600000" id="player_clock">10:00.0</div>
+            </div>
+            <div class="taken_area" id="player_taken"></div>
+        </div>
 
-      <div style="margin-left:10px;" class="die_face" id="die_2">
-        <span class="pip"></span>
-        <span class="pip"></span>
-        <span class="pip"></span>
-        <span class="pip"></span>
-        <span class="pip"></span>
-        <span class="pip"></span>
-      </div>
-    </div>-->
-  </div>
+        <button id="switch_sides" class="button-1 hidden">Switch Sides</button>
+        <button id="player_ready" class="button-1 unready hidden">Ready <i class="fa fa-thumbs-up"></i></button>
+        <button id="skip_move" class="button-1 hidden">Skip Additional Move</button>
+        <h1 id="player_name"></h1>
+        <button id="forfeit_game" class="button-1 hidden">Forfeit</button>
+        <div class="hidden" id="types"></div>
+        <div id="piece_setup_div" class="hidden" style="padding-bottom:70px;">
+            <div id="piece_choice"></div>
+            <table class="styled-table" id="saved_teams_table" style="width:800px;">
+                <thead>
+                <tr>
+                    <th>Team Name</th>
+                    <th>Delete</th>
+                </tr>
+                </thead>
+                <tbody>
+
+                </tbody>
+            </table>
+            <button class="button-1 inline-button" id="randomise_all">Randomise All</button>
+            <button class="button-1 inline-button" id="randomise_missing">Randomise Missing</button>
+            <button class="button-1 inline-button hidden" id="save_team">Save Team</button>
+            <button class="button-1 inline-button" id="clear_team">Clear Team</button>
+            <br/>
+            <button class="button-1 inline-button" id="copy_live">Copy Teams to LIVE PokemonChess.com</button>
+            <div id="taken_piece"></div>
+        </div>
+
+        <!--<div style="display:flex">
+          <div class="die_face" id="die_1">
+            <span class="pip"></span>
+          </div>
+
+          <div style="margin-left:10px;" class="die_face" id="die_2">
+            <span class="pip"></span>
+            <span class="pip"></span>
+            <span class="pip"></span>
+            <span class="pip"></span>
+            <span class="pip"></span>
+            <span class="pip"></span>
+          </div>
+        </div>-->
+    </div>
 </div>
 <div id="left_information">
-  Join the <a href="https://discord.gg/fp5bcCqg8q" target="_blank"><i class="fa-brands fa-discord"></i> Discord!</a><br />
-  Check out <a href="https://smashmonopoly.com" target="_blank">Smash Monopoly!</a><br />
-  If you enjoy consider <a href="https://paypal.me/elxando" target="_blank">buying the dev a coffee?</a>
+    Join the <a href="https://discord.gg/fp5bcCqg8q" target="_blank"><i class="fa-brands fa-discord"></i>
+    Discord!</a><br/>
+    Check out <a href="https://smashmonopoly.com" target="_blank">Smash Monopoly!</a><br/>
+    If you enjoy consider <a href="https://paypal.me/elxando" target="_blank">buying the dev a coffee?</a>
 </div>
 <div id="information">
-  Idea and graphics by <a href="https://www.youtube.com/c/LittleZubat" target="_blank">Little Z</a><br />
-  Programming by <a href="https://www.youtube.com/ElXando1993" target="_blank">El Xando</a>
+    Idea and graphics by <a href="https://www.youtube.com/c/LittleZubat" target="_blank">Little Z</a><br/>
+    Programming by <a href="https://www.youtube.com/ElXando1993" target="_blank">El Xando</a>
 </div>
 
+<iframe style="display:none;" src="https://pokemonchess.com" id="ifr"></iframe>
 </body>
-<script src="js/chess.js?v=3"></script>
+<script src="js/chess.js?v=3.9"></script>
 </html>

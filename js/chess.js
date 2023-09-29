@@ -10,7 +10,8 @@ var boardArray = new Array(64),
     chosenTypes = [];
 
 let chessSettings = {
-    started: false
+    started: false,
+    highlight: []
 };
 
 let savedTeams = {
@@ -86,6 +87,9 @@ const pokemon_types = [
     check music keeps playing after win - maybe because of super effective? - fixed
     show missed / no effect move attempt - done
 
+    Spectating no time game - hide the timer
+    Fix detaching numbers - done
+
 
     v2
     audio play loaded in elements rather than creating new object - done
@@ -116,6 +120,22 @@ let audioList = ['check', 'critical', 'missed', 'nope', 'not-very', 'plink', 'pr
 
 let gifs = {}, audios = {};
 
+function backToMenu(){
+    $('#setup_div').removeClass('hidden');
+    $('#game').addClass('hidden');
+    $('#roomName').val('');
+    $('#roomPassword').val('');
+    $('#no_rng, #random_teams').removeClass('fa-toggle-on').addClass('fa-toggle-off');
+    $('#timer_setting').val('10');
+    $('#start_host').removeClass('hidden');
+    $('#room_settings').addClass('hidden');
+    $('#host_game').addClass('hidden');
+    $('.board_message').addClass('hidden');
+    $('.taken_area').html('');
+    $('#player_ready, #enemy_ready').addClass('unready').removeClass('ready');
+    socket.emit('listRooms');
+    socket.emit('listSpectate');
+}
 function anyBadWords(checkText){
     for (let badWord of bad_words){
         if (checkText.toLowerCase().includes(badWord)){
@@ -148,13 +168,19 @@ function badNameCheck(){
 
 function imageLoaded(){
     imagesLoaded++;
+    $('#loaded_count').html(imagesLoaded + '/197');
     if (imagesLoaded == 174){
-        $('#preloading_images').remove();
-        $('#images_loaded').removeClass('hidden');
+        preloadMessages();
+        /*$('#preloading_images').remove();
+        $('#images_loaded').removeClass('hidden');*/
     }
 }
 
 function preloadMessages(){
+    let loadedImages = 174;
+    loadedImages += 15 - gifList.length;
+    loadedImages += 8 - audioList.length;
+    $('#loaded_count').html(loadedImages + '/197');
     if (gifList.length){
         let gifToLoad = gifList[gifList.length-1];
         gifList.pop();
@@ -179,6 +205,9 @@ function preloadMessages(){
                 break;
         }
         audios[audioToLoad].src = 'audio/' + audioToLoad + '.mp3';
+    } else {
+        $('#preloading_images').remove();
+        $('#images_loaded').removeClass('hidden');
     }
 }
 
@@ -257,6 +286,9 @@ function loadImages(){
             let no_rng = $('#no_rng').hasClass('fa-toggle-on'),
                 random_teams = $('#random_teams').hasClass('fa-toggle-on'),
                 timer_setting = $('#timer_setting').val();
+            if (timer_setting == 'F'){
+                $('#chess_clock').addClass('hidden');
+            }
             socket.emit('createRoom', roomName, $('#roomPassword').val(), winRate, no_rng, random_teams, timer_setting);
             $('#setup_div').addClass('hidden');
             $('#game').removeClass('hidden');
@@ -328,6 +360,7 @@ function loadImages(){
     socket.on('availableRooms', (availableRooms) => {
         if (availableTable){
             availableTable.destroy();
+            availableTable = undefined;
         }
         console.log(availableRooms);
         $('#available_count').html('(' + Object.keys(availableRooms).length + ')');
@@ -336,7 +369,7 @@ function loadImages(){
             room = availableRooms[room];
             let no_rng = room.no_rng ? 'fa-toggle-on' : 'fa-toggle-off',
                 random_teams = room.random_teams ? 'fa-toggle-on' : 'fa-toggle-off';
-            $('#room_list').append('<tr class="pointer" data-pass="'+(room.password ? 'T' : 'F')+'" data-code="'+room.code+'"><td>'+room.host+
+            $('#room_list').append('<tr data-timer="'+room.timer_setting+'" class="pointer" data-pass="'+(room.password ? 'T' : 'F')+'" data-code="'+room.code+'"><td>'+room.host+
                 '</td><td>'+room.name+'</td><td>'+room.winRate+'</td><td data-order="' + (room.password ? '1' : '0') + '">'+
                 '<i class="fa fa-lock'+(room.password ? '' : '-open')+'"></i></td><td><i class="fa '+no_rng+'"></i></td><td><i class="fa '+random_teams+'"></i></td><td>'+room.timer_setting+'</tr>');
         }
@@ -365,6 +398,10 @@ function loadImages(){
             return;
         }
 
+        if ($(this).data('timer') == 'F'){
+            $('#chess_clock').addClass('hidden');
+        }
+
         if ($(this).data('pass') == 'T'){
             let enteredPass = prompt('Enter the password!');
             socket.emit('joinRoom', $(this).data('code'), enteredPass);
@@ -376,13 +413,14 @@ function loadImages(){
     socket.on('spectationRooms', (spectationRooms) => {
         if (spectateTable){
             spectateTable.destroy();
+            spectateTable = undefined;
         }
         $('#spectate_count').html('(' + Object.keys(spectationRooms).length + ')');
         $('#spectate_list').html('');
         for (let room in spectationRooms){
             room = spectationRooms[room];
             let hasPassword = room.password ? 'T' : 'F';
-            $('#spectate_list').append('<tr class="pointer" data-pass="'+hasPassword+'" data-code="'+room.code+'"><td>'+room.host+'</td><td>'+room.secondary+
+            $('#spectate_list').append('<tr data-timer="'+room.timer_setting+'" class="pointer" data-pass="'+hasPassword+'" data-code="'+room.code+'"><td>'+room.host+'</td><td>'+room.secondary+
                 '</td><td>'+room.name+'</td><td data-order="' + (hasPassword == 'T' ? '1' : '0') + '"><i class="fa fa-lock'+(hasPassword == 'T' ? '' : '-open') +'"></i></td></tr>');
         }
         if (!Object.keys(spectationRooms).length){
@@ -409,6 +447,11 @@ function loadImages(){
             return;
         }
 
+        if ($(this).data('timer') == 'F'){
+            $('#chess_clock').addClass('hidden');
+        }
+
+        preloadMessages();
         chessSettings.spectator = true;
         if ($(this).data('pass') == 'T'){
             let enteredPass = prompt('Enter the password!');
@@ -425,6 +468,13 @@ function loadImages(){
             setupGame();
         }
         chessSettings.side = Side[side];
+        if (side == 'LIGHT'){
+            $('.grid_numbers').css('flex-direction', 'column');
+            $('.grid_letters').css('flex-direction', 'row');
+        } else {
+            $('.grid_numbers').css('flex-direction', 'column-reverse');
+            $('.grid_letters').css('flex-direction', 'row-reverse');
+        }
         drawAll();
         chessSettings.enemyName = playerName;
         $('#enemy_name').html(playerName);
@@ -434,9 +484,9 @@ function loadImages(){
             $('#randomise_missing').click();
         } else {
             $('#piece_setup_div').removeClass('hidden');
-            startDraftTimer();    
+            startDraftTimer();
         }
-        
+
     });
 
     socket.on('enemyReady', (types) => {
@@ -557,11 +607,13 @@ function loadImages(){
 
     socket.on('wrongPassword', () => {
         alert('Wrong password!');
+        $('#chess_clock').removeClass('hidden');
         chessSettings.spectator = false;
     });
 
     socket.on('noRoom', () => {
         alert('That room no longer exists.');
+        $('#chess_clock').removeClass('hidden');
         chessSettings.spectator = false;
     });
 
@@ -630,6 +682,13 @@ function loadImages(){
 
     socket.on('rematchStart', (newSide) => {
         chessSettings.side = Side[newSide];
+        if (newSide == 'LIGHT'){
+            $('.grid_numbers').css('flex-direction', 'column');
+            $('.grid_letters').css('flex-direction', 'row');
+        } else {
+            $('.grid_numbers').css('flex-direction', 'column-reverse');
+            $('.grid_letters').css('flex-direction', 'row-reverse');
+        }
         rematch();
     });
 
@@ -744,9 +803,9 @@ function loadImages(){
         currentPiece.clearValidMoves();
         chessSettings.lockPiece = false;
         playAudio('plink',0.3);
-        socket.emit('hitClock');
         nextPlayer();
         socket.emit('nextPlayer');
+        socket.emit('hitClock');
     });
 
     socket.on('playerLeft', () => {
@@ -758,7 +817,7 @@ function loadImages(){
     socket.on('playerReconnected', () => {
         $('#opponent_disconnected').addClass('hidden');
     });
-    
+
     $('.toggle').click(function(){
         if ($(this).hasClass('fa-toggle-on')){
             $(this).removeClass('fa-toggle-on').addClass('fa-toggle-off');
@@ -766,12 +825,12 @@ function loadImages(){
             $(this).addClass('fa-toggle-on').removeClass('fa-toggle-off');
         }
     });
-    
+
     socket.on('startGame', () => {
         preloadMessages();
-        startGame(); 
+        startGame();
     });
-    
+
     socket.on('timerUpdate', (hostRemaining, secondaryRemaining) => {
         console.log('host: ' + hostRemaining);
         console.log('second: ' + secondaryRemaining);
@@ -799,13 +858,9 @@ function loadImages(){
         localStorage.setItem('updates', JSON.stringify(updates));
     });
 
-    socket.on('timerExpired', (winnerSide) => {
-        if (Side[winnerSide] == chessSettings.side){
-            //$('#player_clock').html('00:00.0');
-        } else {
-            //$('#enemy_clock').html('00:00.0');
-        }
-        gameOver(Side[winnerSide], 'by time');
+    socket.on('timerExpired', (loserSide) => {
+        let otherSide = Side[loserSide] == Side.LIGHT ? Side.DARK : Side.LIGHT;
+        gameOver(otherSide, 'by time');
     });
 
     socket.on('duplicateRoom', () => {
@@ -842,9 +897,13 @@ function loadImages(){
         };
         if (chessSettings.side == Side.LIGHT){
             chessSettings.side = Side.DARK;
+            $('.grid_numbers').css('flex-direction', 'column-reverse');
+            $('.grid_letters').css('flex-direction', 'row-reverse');
             currentTeam = boardArray.slice(0,16).map(pieceCheck);
         } else {
             chessSettings.side = Side.LIGHT;
+            $('.grid_numbers').css('flex-direction', 'column');
+            $('.grid_letters').css('flex-direction', 'row');
             currentTeam = boardArray.slice(56,64).map(pieceCheck);
             currentTeam = currentTeam.concat(boardArray.slice(48,56).map(pieceCheck));
         }
@@ -867,7 +926,7 @@ function loadImages(){
     });
 
     $('.back_menu').click(function(){
-        alert('Not yet implemented, please reload...');
+        backToMenu();
     });
 
     socket.on('badTypes', () => {
@@ -877,7 +936,7 @@ function loadImages(){
 
     $('#forfeit_game').click(function(){
         if (confirm('Are you sure you want to forfeit?')){
-            let otherSide = this.side == Side.LIGHT ? Side.DARK : Side.LIGHT;
+            let otherSide = chessSettings.side == Side.LIGHT ? Side.DARK : Side.LIGHT;
             gameOver(otherSide, 'by forfeit');
             socket.emit('forfeit');
         }
@@ -890,6 +949,24 @@ function loadImages(){
     socket.on('tooManyConnections', () => {
         alert('You have too many connections to the game server. Please end some before trying to load the website again.');
         $('#setup_div').addClass('hidden');
+    });
+
+    $('#copy_live').click(function(){
+        if (confirm('Are you sure? This will overwrite your saved teams on the live site.')){
+            let win = document.getElementById('ifr').contentWindow;
+            win.postMessage(localStorage.getItem('savedTeams'), 'https://pokemonchess.com');
+        }
+    });
+
+    $('#clear_team').click(function(){
+        if (chessSettings.side === Side.LIGHT){
+            boardArray.slice(0,16).forEach(function(square){delete square.piece.pokemon_type;});
+        } else {
+            boardArray.slice(48,64).forEach(function(square){delete square.piece.pokemon_type;});
+        }
+        chosenTypes.length = 0;
+        $('.choose_type').css('opacity', '');
+        drawAll();
     });
 }
 
@@ -938,6 +1015,7 @@ function rematch(){
         chessSettings.ready = false;
         previousPiece = undefined;
         chosenTypes = [];
+        console.log('about to set started to false!');
         chessSettings.started = false;
         setupGame();
         if (chessSettings.random_teams){
@@ -948,13 +1026,15 @@ function rematch(){
             chessSettings.draftOver = false;
             $('#player_ready').addClass('unready hidden').removeClass('ready');
             $('#player_ready').html('Ready <i class="fa fa-thumbs-up"></i>');
-            $('#enemy_ready').addClass('unready').removeClass('ready').html('Unready <i class="fa fa-thumbs-down"></i>');
+            $('#enemy_ready').addClass('unready').removeClass('ready hidden').html('Unready <i class="fa fa-thumbs-down"></i>');
             $('#piece_setup_div').removeClass('hidden');
             startDraftTimer();
         }
         if (chessSettings.host){
             socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer);
         }
+    } else {
+        console.log('is a spectator?!');
     }
 }
 
@@ -968,6 +1048,7 @@ function showMessage(message, time){
 }
 
 function startGame(){
+    console.log('STARTING GAME!');
     $('#forfeit_game').removeClass('hidden');
     chessSettings.startTime = Date.now();
     $('#mid_board').html('');
@@ -1140,7 +1221,7 @@ function GamePiece(typeEnum, sideEnum) {
 
         // First remove fill from previous piece and it's old location
         if (previousPiece){
-            boardArray[previousPiece.oldIndex].justLeft = false;
+            //boardArray[previousPiece.oldIndex].justLeft = false;
             draw(previousPiece.oldIndex);
             let previousIndex = previousPiece.getIndex();
             if (this.type == 'pawn'){ // en passant?
@@ -1178,7 +1259,8 @@ function GamePiece(typeEnum, sideEnum) {
                 playAudio('nope');
                 showGif('none', takenType);
             }
-            boardArray[targetIndex].justLeft = true;
+            //boardArray[targetIndex].justLeft = true;
+            chessSettings.highlight.push(targetIndex);
             this.oldIndex = targetIndex;
             previousPiece = this;
             this.clearValidMoves();
@@ -1195,7 +1277,8 @@ function GamePiece(typeEnum, sideEnum) {
 
         boardArray[targetIndex].piece = this;
         boardArray[oldIndex].piece = null;
-        boardArray[oldIndex].justLeft = true;
+        //boardArray[oldIndex].justLeft = true;
+        chessSettings.highlight.push(oldIndex);
         this.oldIndex = oldIndex;
         previousPiece = this;
 
@@ -1225,7 +1308,7 @@ function GamePiece(typeEnum, sideEnum) {
                     gameOver(otherSide, 'by king not very effective death');
                 }
                 $(otherLocation).append('<div style="background-image:url(\'img/'+this.type+'%20'+this.side.file+'.png\')"><img src="img/' + pokemon_image + '" /></div>');
-                boardArray[oldIndex].justLeft = false;
+                //boardArray[oldIndex].justLeft = false;
                 previousPiece = null;
                 playAudio('not-very');
             } else if (this.pokemon_type.super.includes(takenPiece.pokemon_type.type)){
@@ -1253,8 +1336,9 @@ function GamePiece(typeEnum, sideEnum) {
         }
 
         // Redraw gamepieces
-        draw(oldIndex);
-        draw(targetIndex);
+        /*draw(oldIndex);
+        draw(targetIndex);*/
+        drawAll();
 
         if (takenType){
             let pokemon_image = takenType + '%20' + takenPokeType + '.png';
@@ -1410,14 +1494,14 @@ function GamePiece(typeEnum, sideEnum) {
                                     if (thisPiece.side == Side.LIGHT && getY(thisPiece.getIndex()) == 4){
                                         let nextToIndex = getIndex(targetX, originY),
                                             nextToPiece = boardArray[nextToIndex].piece;
-                                        if (nextToPiece == previousPiece && previousPiece.type == 'pawn' && previousPiece.oldIndex != targetIndex){
+                                        if (nextToPiece == previousPiece && previousPiece.type == 'pawn' && previousPiece.oldIndex == previousPiece.getIndex() + 16){
                                             chessSettings.enPassant = targetIndex;
                                             validMoves.push(targetIndex);
                                         }
                                     } else if (thisPiece.side == Side.DARK && getY(thisPiece.getIndex()) == 3){
                                         let nextToIndex = getIndex(targetX, originY),
                                             nextToPiece = boardArray[nextToIndex].piece;
-                                        if (nextToPiece == previousPiece && previousPiece.type == 'pawn' && previousPiece.oldIndex != targetIndex){
+                                        if (nextToPiece == previousPiece && previousPiece.type == 'pawn' && previousPiece.oldIndex == previousPiece.getIndex() - 16){
                                             chessSettings.enPassant = targetIndex;
                                             validMoves.push(targetIndex);
                                         }
@@ -1433,7 +1517,7 @@ function GamePiece(typeEnum, sideEnum) {
                                 break;
                             case Flag.KING:
                                 if (targetPiece){
-                                    if (targetPiece.type !== Type.ROOK){
+                                    if (targetPiece.type !== Type.ROOK || targetPiece.side != currentPlayer){
                                         break MoveLoop;
                                     } else if (firstMove && targetPiece.firstMove){
                                         validMoves.push(targetIndex);
@@ -1488,7 +1572,9 @@ function draw(index, flip) {
         img = boardArray[flippedIndex].piece,
         strokeWidth = 2;
 
-    if (boardArray[flippedIndex].justLeft){
+    if (chessSettings.highlight.includes(flippedIndex)){
+        context.fillStyle = '#bec858';
+    } else if (boardArray[flippedIndex].justLeft){
         context.fillStyle = '#bec858';
     } else if (img && (img.oldIndex || img.oldIndex == 0)){
         context.fillStyle = '#bec858';
@@ -1577,6 +1663,7 @@ function isOdd(num) {
 }
 function nextPlayer() {
     $('#skip_move').addClass('hidden');
+    chessSettings.highlight.length = 0;
     console.log("Current player is: " + currentPlayer + ". Setting next player.");
     if(currentPiece) {
         currentPiece = null;
@@ -1812,8 +1899,11 @@ function setupGame() {
 }
 
 function checkPieceSelection(){
-    if (chosenTypes.length == 16 && $('#switch_sides').hasClass('hidden')){
+    if (chosenTypes.length == 16){
         $('#save_team, #player_ready').removeClass('hidden');
+        if (!$('#switch_sides').hasClass('hidden')){
+            $('#player_ready').addClass('hidden');
+        }
     } else {
         $('#save_team, #player_ready').addClass('hidden');
     }

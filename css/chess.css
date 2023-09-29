@@ -14,8 +14,8 @@ body a{
 canvas#chess_game {
     background-color: #000;
     /*padding: 20px;*/
-    border: 3px solid #222;
-    margin:10px 0;
+    /*border: 3px solid #222;*/
+    margin:25px 0;
     vertical-align:bottom;
 }
 div.button {
@@ -244,6 +244,7 @@ input[type=text], select{
     background-size:66px;
     width:66px;
     height:66px;
+    margin-right:-16px;
 }
 .taken_area img{
     width:66px;
@@ -290,4 +291,30 @@ h3{
 }
 #room_settings td{
     width:250px;
+}
+.chess_number{
+    height:100px;
+    display:flex;
+    align-items:center;
+}
+.chess_letter{
+    width:100px;
+    display:flex;
+    justify-content:center;
+}
+.grid_border{
+    position:absolute;
+    background-color:black;
+    font-weight:600;
+    display:flex;
+    align-items:center;
+}
+.grid_letters{
+    width:850px;
+    height:25px;
+}
+.grid_numbers{
+    height:850px;
+    width:25px;
+    flex-direction:column;
 }

@@ -97,7 +97,24 @@ io.on('connection', (socket) => {
         socket.data.name = name;
     });
 
+    socket.on('join', (room) => {
+        socket.join(room);
+    });
+
     socket.on('listRooms', () => {
+        let [,thisRoom] = socket.rooms;
+        if(thisRoom){
+            socket.leave(thisRoom);
+            if (!socket.data.spectator){
+                delete availableRooms[thisRoom];
+                delete listRooms[thisRoom];
+                delete spectationRooms[thisRoom];
+                delete listSpectate[thisRoom];
+                delete draftTimers[thisRoom];
+                delete winTimers[thisRoom];
+                delete reconnectTimers[thisRoom];
+            }
+        }
         socket.emit('availableRooms', listRooms);
     });
 
@@ -207,7 +224,7 @@ io.on('connection', (socket) => {
                 wantedRoom.enemySide = wantedRoom.hostSide == 'DARK' ? 'LIGHT' : 'DARK';
                 socket.to(wantedRoom.code).emit('playerJoined', socket.data.name, wantedRoom.hostSide, wantedRoom.random_teams);
                 socket.emit('playerJoined', wantedRoom.host, wantedRoom.enemySide, wantedRoom.random_teams);
-                if (!wantedRoom.random_teams){
+                if (!wantedRoom.random_teams && wantedRoom.timer_setting != 'F'){
                     draftTimers[wantedRoom.code] = setTimeout(function(){
                         io.to(wantedRoom.code).emit('draftTimeExpired');
                         delete draftTimers[wantedRoom.code];
@@ -241,6 +258,9 @@ io.on('connection', (socket) => {
     socket.on('ready', (types) => {
         const [,thisRoom] = socket.rooms;
         let theRoom = spectationRooms[thisRoom];
+        if (!theRoom){
+            return;
+        }
         let typeCheck = new Set(types);
         if (typeCheck.size < 16){
             socket.emit('badTypes');
@@ -253,6 +273,8 @@ io.on('connection', (socket) => {
             theRoom.secondaryReady = true;
         }
         if (theRoom.hostReady && theRoom.secondaryReady){
+            theRoom.hostReady = false;
+            theRoom.secondaryReady = false;
             if (draftTimers[thisRoom]){
                 clearTimeout(draftTimers[thisRoom]);
                 delete draftTimers[thisRoom];
@@ -269,6 +291,9 @@ io.on('connection', (socket) => {
     socket.on('unready', () => {
         const [,thisRoom] = socket.rooms;
         let theRoom = spectationRooms[thisRoom];
+        if (!theRoom){
+            return;
+        }
         socket.to(thisRoom).emit('enemyUnready');
         if (theRoom.socketid == socket.id){
             theRoom.hostReady = false;
@@ -277,21 +302,31 @@ io.on('connection', (socket) => {
         }
     });
     socket.on('normalMove', (pieceIndex, moveIndex, hitType) => {
-        console.log('normalMove');
         const [,thisRoom] = socket.rooms;
+        let theRoom = spectationRooms[thisRoom];
+        if (!theRoom){
+            return;
+        }
+        let theSide = theRoom.socketid == socket.id ? theRoom.hostSide : theRoom.enemySide;
+        if (hitType && hitType != 'none'){
+            io.to(thisRoom).emit('timerExpired', theSide);
+            return;
+        }
         //let theRoom = spectationRooms[thisRoom];
         socket.to(thisRoom).emit('normalMove', pieceIndex, moveIndex, hitType);
         //hitClock(socket, theRoom);
     });
     socket.on('attemptTake', (pieceIndex, moveIndex) => {
-        console.log('attemptTake');
         const [,thisRoom] = socket.rooms;
         let theRoom = spectationRooms[thisRoom];
+        if (!theRoom){
+            return;
+        }
         let hitType = 'normal';
         if (!theRoom.no_rng){
             if (~~(Math.random() * 16) == 0){
                 hitType = 'critical';
-            } else if (~~(Math.random() * 10) == 0){
+            } else if (~~(Math.random() * 20) == 0){
                 hitType = 'miss';
             }    
         }
@@ -303,6 +338,9 @@ io.on('connection', (socket) => {
     socket.on('promotion', (pieceIndex, newType) => {
         const [,thisRoom] = socket.rooms;
         let theRoom = spectationRooms[thisRoom];
+        if (!theRoom){
+            return;
+        }
         let theSide = theRoom.socketid == socket.id ? theRoom.hostSide : theRoom.enemySide;
         if (theSide == 'LIGHT' && pieceIndex < 56){
             io.to(thisRoom).emit('timerExpired', theSide);
@@ -352,10 +390,13 @@ io.on('connection', (socket) => {
             if (draftTimers[theRoom.code]){
                 clearTimeout(draftTimers[theRoom.code]);
             }
-            draftTimers[theRoom.code] = setTimeout(function(){
-                io.to(theRoom.code).emit('draftTimeExpired');
-                delete draftTimers[theRoom.code];
-            }, 180000);
+            if (!theRoom.random_teams && theRoom.timer_setting != 'F'){
+                draftTimers[theRoom.code] = setTimeout(function(){
+                    io.to(theRoom.code).emit('draftTimeExpired');
+                    delete draftTimers[theRoom.code];
+                }, 180000);
+            }
+
         }
     });
     socket.on('nextPlayer', () => {
@@ -384,7 +425,12 @@ io.on('connection', (socket) => {
     socket.on('hitClock', () => {
         const [,thisRoom] = socket.rooms;
         let theRoom = spectationRooms[thisRoom];
-        hitClock(socket, theRoom);
+        if (!theRoom){
+            return;
+        }
+        if (theRoom.timer_setting != 'F'){
+            hitClock(socket, theRoom);
+        }
     });
 });
 
