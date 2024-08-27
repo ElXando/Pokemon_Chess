@@ -15,7 +15,7 @@ canvas#chess_game {
     background-color: #000;
     /*padding: 20px;*/
     /*border: 3px solid #222;*/
-    margin:25px 0;
+    margin:25px;
     vertical-align:bottom;
 }
 div.button {
@@ -317,4 +317,7 @@ h3{
     height:850px;
     width:25px;
     flex-direction:column;
+}
+.back_menu{
+    pointer-events:all;
 }

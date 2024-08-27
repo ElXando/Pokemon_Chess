@@ -1,11 +1,9 @@
 const http = require('https');
 const fs = require('node:fs');
 const options = {
-    /*key: fs.readFileSync('/etc/letsencrypt/live/smashmonopoly.com/privkey.pem'),
-    cert: fs.readFileSync('/etc/letsencrypt/live/smashmonopoly.com/cert.pem'),
-    ca: fs.readFileSync('/etc/letsencrypt/live/smashmonopoly.com/fullchain.pem')*/
-    pfx: fs.readFileSync('latest.pfx'),
-    passphrase: 'Zac9EjfEqg8BQdIiqFaQA8ztQY0Nx3iT45JglEVBDow='
+    key: fs.readFileSync('/usr/local/psa/var/modules/letsencrypt/etc/live/pokemonchess.com/privkey.pem'),
+    cert: fs.readFileSync('/usr/local/psa/var/modules/letsencrypt/etc/live/pokemonchess.com/cert.pem'),
+    ca: fs.readFileSync('/usr/local/psa/var/modules/letsencrypt/etc/live/pokemonchess.com/fullchain.pem')
 };
 const { Server } = require("socket.io");
 const httpServer = http.createServer(options);
@@ -115,6 +113,7 @@ io.on('connection', (socket) => {
                 delete reconnectTimers[thisRoom];
             }
         }
+        socket.data.spectator = false;
         socket.emit('availableRooms', listRooms);
     });
 
@@ -123,6 +122,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('createRoom', (roomName, password, winRate, no_rng, random_teams, timer_setting) => {
+        reduceSocketToOneRoom(socket);
+
         let agent = socket.handshake.headers['user-agent'],
             ip = socket.handshake.address
         /*let existingRoomForUser = availableRooms.find(function(room){
@@ -198,6 +199,8 @@ io.on('connection', (socket) => {
 
     socket.on('joinRoom', (roomCode, password) => {
         //let wantedRoom = availableRooms.find(function(room){return room.code == roomCode;});
+        reduceSocketToOneRoom(socket);
+
         let wantedRoom = availableRooms[roomCode];
         if (!wantedRoom){
             console.log('Cant find ' + roomCode);
@@ -240,6 +243,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('spectate', (roomCode, password) => {
+        reduceSocketToOneRoom(socket);
+
         let wantedRoom = spectationRooms[roomCode];
         if (!wantedRoom){
             socket.emit('noRoom');
@@ -248,8 +253,11 @@ io.on('connection', (socket) => {
                 socket.data.spectator = true;
                 wantedRoom.spectators.push(socket.data.name);
                 socket.join(wantedRoom.code);
-                socket.to(wantedRoom.code).emit('spectators', wantedRoom.spectators);
+                io.to(wantedRoom.code).emit('spectators', wantedRoom.spectators);
             } else {
+                console.log('wrong pass');
+                console.log(password);
+                console.log(wantedRoom.password);
                 socket.emit('wrongPassword');
             }
         }
@@ -326,7 +334,7 @@ io.on('connection', (socket) => {
         if (!theRoom.no_rng){
             if (~~(Math.random() * 16) == 0){
                 hitType = 'critical';
-            } else if (~~(Math.random() * 20) == 0){
+            } else if (~~(Math.random() * 10) == 0){
                 hitType = 'miss';
             }    
         }
@@ -352,9 +360,9 @@ io.on('connection', (socket) => {
         socket.to(thisRoom).emit('promotion', pieceIndex, newType);
         //hitClock(socket, theRoom);
     });
-    socket.on('syncSpectators', (boardArray, chessSettings, currentPlayer) => {
+    socket.on('syncSpectators', (boardArray, chessSettings, currentPlayer, playerTaken, enemyTaken) => {
         const [,thisRoom] = socket.rooms;
-        socket.to(thisRoom).emit('syncSpectators', boardArray, chessSettings, currentPlayer);
+        socket.to(thisRoom).emit('syncSpectators', boardArray, chessSettings, currentPlayer, playerTaken, enemyTaken);
     });
     socket.on('rematch', () => {
         const [,thisRoom] = socket.rooms;
@@ -413,7 +421,12 @@ io.on('connection', (socket) => {
     });
     socket.on('forfeit', () => {
         const [,thisRoom] = socket.rooms;
-        socket.to(thisRoom).emit('forfeit');
+        let theRoom = spectationRooms[thisRoom];
+        if (!theRoom){
+            return;
+        }
+        let theSide = theRoom.socketid == socket.id ? theRoom.hostSide : theRoom.enemySide;
+        socket.to(thisRoom).emit('forfeit', theSide);
     });
     socket.on('stats', () => {
         console.log('Available Rooms: ' + Object.keys(availableRooms).length);
@@ -434,7 +447,18 @@ io.on('connection', (socket) => {
     });
 });
 
+function reduceSocketToOneRoom(socket){
+    let [,secondRoom] = socket.rooms;
+    while (secondRoom){
+        socket.leave(secondRoom);
+        [,secondRoom] = socket.rooms;
+    }
+}
+
 function hitClock(socket, room){
+    if (socket.data.spectator){
+        return;
+    }
     console.log('clock time!');
     let timerRemaining, timerSide;
     if (room.socketid == socket.id){

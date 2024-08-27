@@ -118,9 +118,12 @@ let gifList = ['bishop missed', 'bishop none', 'king missed', 'king none', 'knig
     'queen missed', 'queen none', 'rook missed', 'rook none', 'critical', 'not-very', 'super'];
 let audioList = ['check', 'critical', 'missed', 'nope', 'not-very', 'plink', 'promotion', 'super'];
 
-let gifs = {}, audios = {};
+let gifs = {}, audios = {check: {pause: function(){console.log('not loaded');}}};
 
 function backToMenu(){
+    if (chessSettings.clock){
+        clearInterval(chessSettings.clock);
+    }
     $('#setup_div').removeClass('hidden');
     $('#game').addClass('hidden');
     $('#roomName').val('');
@@ -133,6 +136,24 @@ function backToMenu(){
     $('.board_message').addClass('hidden');
     $('.taken_area').html('');
     $('#player_ready, #enemy_ready').addClass('unready').removeClass('ready');
+    $('#enemy_ready').html('Unready <i class="fa fa-thumbs-down"></i>');
+    $('#player_ready').html('Ready <i class="fa fa-thumbs-up"></i>');
+    $('#chess_clock').addClass('hidden');
+    $('#switch_sides').addClass('hidden');
+    $('.team_builder').addClass('hidden');
+    $('#forfeit_game').addClass('hidden');
+    $('.enemy_element').removeClass('hidden');
+    $('#piece_setup_div').addClass('hidden');
+    $('#spectators').html('');
+    $('#game').css('pointer-events', '');
+    $('#player_name').html($('#yourName').val());
+    chessSettings = {
+        started: false,
+        highlight: [],
+        playerName: $('#yourName').val()
+    };
+    chosenTypes = [];
+    previousPiece = undefined;
     socket.emit('listRooms');
     socket.emit('listSpectate');
 }
@@ -206,6 +227,7 @@ function preloadMessages(){
         }
         audios[audioToLoad].src = 'audio/' + audioToLoad + '.mp3';
     } else {
+        clearInterval(chessSettings.loadTimeout);
         $('#preloading_images').remove();
         $('#images_loaded').removeClass('hidden');
     }
@@ -250,6 +272,11 @@ function loadImages(){
         }
     }
 
+    chessSettings.loadTimeout = setTimeout(function(){
+        $('#preloading_images').remove();
+        $('#images_loaded').removeClass('hidden');
+    }, 60000);
+
     $('#start_host').click(function(){
         $(this).addClass('hidden');
         $('#room_settings').removeClass('hidden');
@@ -286,15 +313,14 @@ function loadImages(){
             let no_rng = $('#no_rng').hasClass('fa-toggle-on'),
                 random_teams = $('#random_teams').hasClass('fa-toggle-on'),
                 timer_setting = $('#timer_setting').val();
-            if (timer_setting == 'F'){
-                $('#chess_clock').addClass('hidden');
-            }
             socket.emit('createRoom', roomName, $('#roomPassword').val(), winRate, no_rng, random_teams, timer_setting);
+            $('#enemy_name').html('Awaiting Opponent...');
             $('#setup_div').addClass('hidden');
             $('#game').removeClass('hidden');
             chessSettings.host = true;
             chessSettings.random_teams = random_teams;
             chessSettings.side = Side.LIGHT;
+            chessSettings.timer_setting = timer_setting;
             setupGame();
         } else {
             alert('Enter a room name!');
@@ -321,11 +347,7 @@ function loadImages(){
 
     });
 
-    socket = io('https://elxando.co.uk:2999', {
-        /*cors: {
-            origin: 'https://elxando.co.uk',
-            methods: ['GET', 'POST']
-        },*/
+    socket = io('https://pokemonchess.com:2999', {
         timeout: 5000,
         query: {
             beta: true
@@ -368,10 +390,18 @@ function loadImages(){
         for (let room in availableRooms){
             room = availableRooms[room];
             let no_rng = room.no_rng ? 'fa-toggle-on' : 'fa-toggle-off',
-                random_teams = room.random_teams ? 'fa-toggle-on' : 'fa-toggle-off';
+                random_teams = room.random_teams ? 'fa-toggle-on' : 'fa-toggle-off',
+                timer_friendly;
+            if (room.timer_setting == '10'){
+                timer_friendly = '10 Mins';
+            } else if (room.timer_setting == '3|2'){
+                timer_friendly = 'Blitz 3|2'
+            } else {
+                timer_friendly = 'None';
+            }
             $('#room_list').append('<tr data-timer="'+room.timer_setting+'" class="pointer" data-pass="'+(room.password ? 'T' : 'F')+'" data-code="'+room.code+'"><td>'+room.host+
                 '</td><td>'+room.name+'</td><td>'+room.winRate+'</td><td data-order="' + (room.password ? '1' : '0') + '">'+
-                '<i class="fa fa-lock'+(room.password ? '' : '-open')+'"></i></td><td><i class="fa '+no_rng+'"></i></td><td><i class="fa '+random_teams+'"></i></td><td>'+room.timer_setting+'</tr>');
+                '<i class="fa fa-lock'+(room.password ? '' : '-open')+'"></i></td><td><i class="fa '+no_rng+'"></i></td><td><i class="fa '+random_teams+'"></i></td><td>'+timer_friendly+'</tr>');
         }
         if (!Object.keys(availableRooms).length){
             $('#room_list').append('<tr><td colspan="100%">No rooms currently available.</td></tr>');
@@ -398,9 +428,7 @@ function loadImages(){
             return;
         }
 
-        if ($(this).data('timer') == 'F'){
-            $('#chess_clock').addClass('hidden');
-        }
+        chessSettings.timer_setting = $(this).data('timer');
 
         if ($(this).data('pass') == 'T'){
             let enteredPass = prompt('Enter the password!');
@@ -447,9 +475,7 @@ function loadImages(){
             return;
         }
 
-        if ($(this).data('timer') == 'F'){
-            $('#chess_clock').addClass('hidden');
-        }
+        chessSettings.timer_setting = $(this).data('timer');
 
         preloadMessages();
         chessSettings.spectator = true;
@@ -464,7 +490,10 @@ function loadImages(){
     socket.on('playerJoined', (playerName, side, random_teams) => {
         $('#setup_div').addClass('hidden');
         $('#game').removeClass('hidden');
-        if (!boardArray[0]){
+        if (chessSettings.timer_setting != 'F'){
+            $('#chess_clock').removeClass('hidden');
+        }
+        if (!chessSettings.host){
             setupGame();
         }
         chessSettings.side = Side[side];
@@ -607,20 +636,18 @@ function loadImages(){
 
     socket.on('wrongPassword', () => {
         alert('Wrong password!');
-        $('#chess_clock').removeClass('hidden');
         chessSettings.spectator = false;
     });
 
     socket.on('noRoom', () => {
         alert('That room no longer exists.');
-        $('#chess_clock').removeClass('hidden');
         chessSettings.spectator = false;
     });
 
     socket.on('spectators', (spectators) => {
         if (spectators.length){
             if (chessSettings.host){
-                socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer);
+                socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer, $('#player_taken').html(), $('#enemy_taken').html());
             }
             $('#spectators').html('<b>Spectators</b><br /><br />');
             for (spectator of spectators){
@@ -632,12 +659,17 @@ function loadImages(){
         }
     });
 
-    socket.on('syncSpectators', (newBoardArray, newChessSettings, newCurrentPlayer) => {
+    socket.on('syncSpectators', (newBoardArray, newChessSettings, newCurrentPlayer, playerTaken, enemyTaken) => {
         if (chessSettings.spectator){
+            if (chessSettings.timer_setting != 'F'){
+                $('#chess_clock').removeClass('hidden');
+            }
             if (chessSettings.clock){
                 clearInterval(chessSettings.clock);
             }
 
+            $('#player_taken').html(playerTaken);
+            $('#enemy_taken').html(enemyTaken);
             $('#setup_div').addClass('hidden');
             $('#player_ready, #enemy_ready').addClass('hidden');
             $('#game').removeClass('hidden').css('pointer-events', 'none');
@@ -646,6 +678,18 @@ function loadImages(){
             newChessSettings.audio = undefined;
             newChessSettings.side = newChessSettings.side.name == 'Light' ? Side.LIGHT : Side.DARK;
             newCurrentPlayer = newCurrentPlayer.name == 'Light' ? Side.LIGHT : Side.DARK;
+            if (newCurrentPlayer == newChessSettings.side){
+                newChessSettings.playerRemaining = newChessSettings.currentRemaining;
+            } else {
+                newChessSettings.enemyRemaining = newChessSettings.currentRemaining;
+            }
+            if (newChessSettings.side.name == 'Light'){
+                $('.grid_numbers').css('flex-direction', 'column');
+                $('.grid_letters').css('flex-direction', 'row');
+            } else {
+                $('.grid_numbers').css('flex-direction', 'column-reverse');
+                $('.grid_letters').css('flex-direction', 'row-reverse');
+            }
             chessSettings = newChessSettings;
             boardArray = newBoardArray;
             previousPiece = undefined;
@@ -667,7 +711,7 @@ function loadImages(){
             } else {
                 $('#player_clock').html(millisToClock(chessSettings.playerRemaining));
                 $('#enemy_clock').html(millisToClock(chessSettings.enemyRemaining));
-                //hitClock(true);
+                hitClock();
             }
         }
     });
@@ -878,7 +922,6 @@ function loadImages(){
         chessSettings.side = Side.LIGHT;
         drawAll();
         $('#piece_setup_div').removeClass('hidden');
-        $('#chess_clock').addClass('hidden');
         $('.enemy_element').addClass('hidden');
         $('#switch_sides').removeClass('hidden');
         $('.team_builder').removeClass('hidden');
@@ -942,8 +985,9 @@ function loadImages(){
         }
     });
 
-    socket.on('forfeit', () => {
-        gameOver(chessSettings.side, 'by forfeit');
+    socket.on('forfeit', (forfeitSide) => {
+        let theSide = Side[forfeitSide] == Side.LIGHT ? Side.DARK : Side.LIGHT;
+        gameOver(theSide, 'by forfeit');
     });
 
     socket.on('tooManyConnections', () => {
@@ -1031,7 +1075,7 @@ function rematch(){
             startDraftTimer();
         }
         if (chessSettings.host){
-            socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer);
+            socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer, $('#player_taken').html(), $('#enemy_taken').html());
         }
     } else {
         console.log('is a spectator?!');
@@ -1078,7 +1122,7 @@ function startGame(){
     //$('#enemy_clock, #player_clock').html('10:00.0');
     //hitClock();
     if (chessSettings.host && !chessSettings.spectator){
-        socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer);
+        socket.emit('syncSpectators', boardArray, chessSettings, currentPlayer, $('#player_taken').html(), $('#enemy_taken').html());
     }
 }
 
@@ -1111,6 +1155,8 @@ function hitClock(noSet){
         } else {
             remainingTime = chessSettings.enemyRemaining - (Date.now() - chessSettings.clockStart);
         }
+
+        chessSettings.currentRemaining = remainingTime;
 
         /*if (remainingTime <= 0){
             let winnerName = chessSettings.side == currentPlayer ? chessSettings.enemyName : chessSettings.playerName;
@@ -1220,7 +1266,8 @@ function GamePiece(typeEnum, sideEnum) {
         let takenPiece;
 
         // First remove fill from previous piece and it's old location
-        if (previousPiece){
+        //if (previousPiece){
+        if (previousPiece && boardArray.find(function(space){return space.piece == previousPiece;})){
             //boardArray[previousPiece.oldIndex].justLeft = false;
             draw(previousPiece.oldIndex);
             let previousIndex = previousPiece.getIndex();
